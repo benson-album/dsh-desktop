@@ -18,15 +18,26 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process'
-import { createInterface } from 'node:readline'
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import {
+  createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync,
+} from 'node:fs'
+import { get as httpGet } from 'node:http'
+import { get as httpsGet } from 'node:https'
 import { join } from 'node:path'
+import { createInterface } from 'node:readline'
 
 /** Default remote the app clones and updates from. */
 export const DEFAULT_REMOTE = 'https://github.com/deepseek-ai/deepseek-harness.git'
 
+/** Default repo that hosts the release assets (this shell's repo). */
+export const DEFAULT_RELEASE_REPO = 'benson-album/dsh-desktop'
+
 /** Upgrade channels. 'tag' follows the latest `dsh-v*` release tag; 'master' follows origin/master. */
 export type UpgradeChannel = 'tag' | 'master'
+
+/** Update source: 'release' downloads a prebuilt artifact from GitHub Releases; 'source' builds from git. */
+export type UpdateSource = 'release' | 'source'
 
 /** Upgrade settings resolved by the main process from settings.json + defaults. */
 export interface UpgradeSettings {
@@ -37,12 +48,22 @@ export interface UpgradeSettings {
   nodePath?: string
   pnpmPath?: string
   gitPath?: string
+  // Release channel (§8 / §13)
+  updateSource: UpdateSource
+  /** Repo that hosts the release artifacts, `owner/repo`. */
+  releaseRepo: string
+  /** Artifact name pattern (informational; matching is by os+arch in the manifest). */
+  releaseAssetPattern: string
+  /** Explicit manifest URL override (e.g. a mirror); defaults to GitHub `releases/latest/download/latest.json`. */
+  releaseManifestUrl?: string
 }
 
 /** Progress events streamed to the progress window / toast. */
 export interface UpgradeEvents {
   phase: (phase: string, detail?: string) => void
   log: (line: string) => void
+  /** Download progress (bytes). Used by the release channel; throttled by the caller. */
+  progress?: (received: number, total: number) => void
 }
 
 /** Harness snapshot used by the About panel and update dialogs. */
@@ -56,10 +77,89 @@ export interface HarnessSnapshot {
   harnessDir: string
 }
 
+/* ─────────────────────────── release manifest (protocol v1, §4 / §13) ─────────────────────────── */
+
+export interface ReleaseAsset {
+  name: string
+  url: string
+  sha256: string
+  size: number
+  os: string
+  arch: string
+}
+
+export interface ReleaseManifest {
+  schemaVersion?: number
+  version: string
+  tag: string
+  publishedAt?: string
+  notes?: string
+  assets: ReleaseAsset[]
+}
+
+/**
+ * Parse + validate a latest.json manifest. Returns null when required fields
+ * are missing or malformed (the caller turns that into a failed check).
+ * Unknown fields are ignored — old shells stay compatible with new manifests.
+ */
+export function parseReleaseManifest(raw: string): ReleaseManifest | null {
+  let doc: unknown
+  try {
+    doc = JSON.parse(raw)
+  } catch {
+    return null
+  }
+  if (typeof doc !== 'object' || doc === null) return null
+  const m = doc as Record<string, unknown>
+  if (typeof m.version !== 'string' || m.version === '' || typeof m.tag !== 'string' || m.tag === '') return null
+  if (!Array.isArray(m.assets)) return null
+  const assets: ReleaseAsset[] = []
+  for (const a of m.assets as unknown[]) {
+    if (typeof a !== 'object' || a === null) return null
+    const item = a as Record<string, unknown>
+    if (typeof item.name !== 'string' || typeof item.url !== 'string' || typeof item.sha256 !== 'string'
+      || typeof item.size !== 'number' || typeof item.os !== 'string' || typeof item.arch !== 'string') {
+      return null
+    }
+    assets.push({ name: item.name, url: item.url, sha256: item.sha256, size: item.size, os: item.os, arch: item.arch })
+  }
+  if (assets.length === 0) return null
+  return {
+    schemaVersion: typeof m.schemaVersion === 'number' ? m.schemaVersion : 1,
+    version: m.version,
+    tag: m.tag,
+    publishedAt: typeof m.publishedAt === 'string' ? m.publishedAt : undefined,
+    notes: typeof m.notes === 'string' ? m.notes : undefined,
+    assets,
+  }
+}
+
+/** Node platform name as used in the manifest (`process.platform`: darwin/win32/linux). */
+export function manifestOs(): string {
+  return process.platform
+}
+
+/** Node arch name as used in the manifest (`process.arch`: x64/arm64/arm). */
+export function manifestArch(): string {
+  return process.arch
+}
+
+/** Pick the artifact matching the host os+arch; null when no artifact exists for this machine. */
+export function matchAsset(manifest: ReleaseManifest, os: string, arch: string): ReleaseAsset | null {
+  return manifest.assets.find((a) => a.os === os && a.arch === arch) ?? null
+}
+
+/** Default manifest URL: the latest release's `latest.json` asset (GitHub follows the redirect). */
+export function releaseManifestUrl(settings: UpgradeSettings): string {
+  if (settings.releaseManifestUrl !== undefined && settings.releaseManifestUrl !== '') return settings.releaseManifestUrl
+  return `https://github.com/${settings.releaseRepo}/releases/latest/download/latest.json`
+}
+
 /* ─────────────────────────── update state machine ─────────────────────────── */
 
 export type UpdateState =
-  | 'idle' | 'checking' | 'building' | 'ready' | 'applying' | 'applied' | 'failed'
+  | 'idle' | 'checking' | 'building' | 'downloading' | 'extracting'
+  | 'ready' | 'applying' | 'applied' | 'failed'
 
 /** Persistent state across crashes, stored at APP_HOME/update-state.json. */
 export interface UpdateStateFile {
@@ -71,6 +171,12 @@ export interface UpdateStateFile {
   buildError?: string
   startedAt: number
   finishedAt: number
+  /** Channel that produced this update ('release' | 'source'); release state may lack commits. */
+  source?: UpdateSource
+  /** Artifact URL for the release channel (diagnostics). */
+  assetUrl?: string
+  /** Download progress (release channel, in-memory only, not persisted frequently). */
+  progress?: { received: number; total: number }
 }
 
 export function defaultUpdateState(): UpdateStateFile {
@@ -96,7 +202,7 @@ export function saveUpdateState(statePath: string, state: UpdateStateFile): void
 
 export type CheckResult =
   | { status: 'up-to-date'; current: string; target: string; tag?: string }
-  | { status: 'update-available'; from: string; to: string; tag?: string; targetName: string }
+  | { status: 'update-available'; from: string; to: string; tag?: string; targetName: string; assetUrl?: string; assetSha256?: string; assetSize?: number }
   | { status: 'not-a-repo'; dir: string }
   | { status: 'no-target'; detail: string }
   | { status: 'failed'; step: string; message: string }
@@ -453,10 +559,22 @@ export function describeHarness(settings: UpgradeSettings, baseEnv: NodeJS.Proce
 }
 
 /**
- * Fetch and decide whether an upgrade exists. Pure `git fetch` — the run
- * dir's working tree is never touched. Does NOT build or modify anything.
+ * Decide whether an upgrade exists. The release channel fetches the latest
+ * manifest from GitHub Releases; the source channel runs a pure `git fetch`
+ * (the run dir's working tree is never touched). Never builds or modifies.
  */
 export async function checkForUpdates(
+  settings: UpgradeSettings,
+  baseEnv: NodeJS.ProcessEnv,
+  events: UpgradeEvents,
+  signal?: AbortSignal,
+): Promise<CheckResult> {
+  if (settings.updateSource === 'release') return checkReleaseUpdates(settings, events, signal)
+  return checkGitUpdates(settings, baseEnv, events, signal)
+}
+
+/** Source channel: pure `git fetch` + tag resolution (existing pipeline, kept intact). */
+async function checkGitUpdates(
   settings: UpgradeSettings,
   baseEnv: NodeJS.ProcessEnv,
   events: UpgradeEvents,
@@ -498,6 +616,108 @@ export async function checkForUpdates(
     return { status: 'up-to-date', current: from, target: to, tag }
   }
   return { status: 'update-available', from, to, tag, targetName: tag ?? 'origin/master' }
+}
+
+/* ─────────────────────────── release channel (check) ─────────────────────────── */
+
+/** Release channel: fetch latest.json, pick the host's artifact, compare versions. */
+async function checkReleaseUpdates(
+  settings: UpgradeSettings,
+  events: UpgradeEvents,
+  signal?: AbortSignal,
+): Promise<CheckResult> {
+  const url = releaseManifestUrl(settings)
+  events.phase('checking', url)
+  const res = await httpGetText(url, 30_000, signal)
+  if (res.cancelled) return { status: 'cancelled' }
+  if (!res.ok) return { status: 'failed', step: 'fetch manifest', message: `${url}: ${res.message}` }
+  const manifest = parseReleaseManifest(res.text)
+  if (manifest === null) return { status: 'failed', step: 'parse manifest', message: `invalid latest.json from ${url}` }
+  const asset = matchAsset(manifest, manifestOs(), manifestArch())
+  if (asset === null) {
+    return { status: 'no-target', detail: `no artifact for ${process.platform}-${process.arch} in ${manifest.tag}` }
+  }
+  const current = currentVersion(settings.harnessDir, settings)
+  const from = current.version
+  const to = manifest.version
+  if (from === to) return { status: 'up-to-date', current: from, target: to, tag: manifest.tag }
+  events.log(`[release] found ${manifest.tag}: ${from} -> ${to}`)
+  return {
+    status: 'update-available', from, to, tag: manifest.tag, targetName: manifest.tag,
+    assetUrl: asset.url, assetSha256: asset.sha256, assetSize: asset.size,
+  }
+}
+
+/**
+ * Local version for the release channel: harness/version.json first (written by
+ * the release packaging), then the git-based snapshot as a fallback.
+ */
+export function currentVersion(harnessDir: string, settings: UpgradeSettings): { version: string; commit: string; tag: string } {
+  const vj = join(harnessDir, 'version.json')
+  if (existsSync(vj)) {
+    try {
+      const v = JSON.parse(readFileSync(vj, 'utf8')) as { version?: unknown; commit?: unknown }
+      if (typeof v.version === 'string' && v.version !== '') {
+        return { version: v.version, commit: typeof v.commit === 'string' ? v.commit : '', tag: '' }
+      }
+    } catch { /* fall through to the git snapshot */ }
+  }
+  const s = describeHarness({ ...settings, harnessDir }, process.env)
+  return { version: s.version, commit: s.commit, tag: s.tag }
+}
+
+/** Pick the http(s) client by URL scheme (local mirrors / tests may be plain http). */
+function httpGetByScheme(
+  url: string,
+  opts: { headers: Record<string, string> },
+  cb: (res: import('node:http').IncomingMessage) => void,
+): import('node:http').ClientRequest {
+  return url.startsWith('https:')
+    ? httpsGet(url, opts, cb)
+    : httpGet(url, opts, cb)
+}
+
+/** GET text with redirect following (GitHub `releases/latest/download` redirects) + abort support. */
+function httpGetText(
+  url: string,
+  timeoutMs: number,
+  signal?: AbortSignal,
+  redirects = 5,
+): Promise<{ ok: boolean; text: string; message: string; cancelled: boolean }> {
+  return new Promise((resolve) => {
+    let done = false
+    let ignoreError = false
+    const finish = (r: { ok: boolean; text: string; message: string; cancelled: boolean }): void => {
+      if (!done) { done = true; resolve(r) }
+    }
+    const req = httpGetByScheme(url, { headers: { 'User-Agent': 'dsh-desktop-updater' } }, (res) => {
+      const status = res.statusCode ?? 0
+      if (status >= 300 && status < 400 && res.headers.location !== undefined && redirects > 0) {
+        ignoreError = true
+        res.resume()
+        req.destroy()
+        void httpGetText(new URL(res.headers.location, url).toString(), timeoutMs, signal, redirects - 1).then(finish)
+        return
+      }
+      if (status !== 200) {
+        res.resume()
+        finish({ ok: false, text: '', message: `HTTP ${status}`, cancelled: false })
+        return
+      }
+      const chunks: Buffer[] = []
+      res.on('data', (c) => chunks.push(c as Buffer))
+      res.on('end', () => finish({ ok: true, text: Buffer.concat(chunks).toString('utf8'), message: '', cancelled: false }))
+      res.on('error', (err) => finish({ ok: false, text: '', message: String(err), cancelled: false }))
+    })
+    req.on('error', (err) => {
+      if (ignoreError) return
+      finish({ ok: false, text: '', message: String(err), cancelled: false })
+    })
+    const timer = setTimeout(() => req.destroy(new Error('timeout')), timeoutMs)
+    const onAbort = (): void => finish({ ok: false, text: '', message: 'cancelled', cancelled: true })
+    signal?.addEventListener('abort', onAbort, { once: true })
+    req.on('close', () => { clearTimeout(timer); signal?.removeEventListener('abort', onAbort) })
+  })
 }
 
 /* ─────────────────────────── background build ─────────────────────────── */
@@ -563,6 +783,186 @@ export async function buildUpdate(
   return { status: 'ready', from: describeHarness(settings, baseEnv).commit, to: toCommit, tag }
 }
 
+/* ─────────────────────────── release channel (produce candidate) ─────────────────────────── */
+
+/**
+ * Produce the next-version candidate in the build dir while the old version
+ * keeps serving. Channel dispatch:
+ *  - source:  existing git archive + pnpm install/build pipeline (buildUpdate)
+ *  - release: download the artifact → verify size+sha256 → extract → validate
+ */
+export async function produceUpdate(
+  settings: UpgradeSettings,
+  baseEnv: NodeJS.ProcessEnv,
+  buildDir: string,
+  downloadsDir: string,
+  target: { from: string; to: string; tag?: string; assetUrl?: string; assetSha256?: string; assetSize?: number },
+  events: UpgradeEvents,
+  signal?: AbortSignal,
+): Promise<BuildResult> {
+  if (settings.updateSource !== 'release') {
+    return buildUpdate(settings, baseEnv, buildDir, target.to, target.tag, events, signal)
+  }
+  if (target.assetUrl === undefined) {
+    return { status: 'failed', step: 'download', message: 'update-available without assetUrl (release channel)' }
+  }
+  const tagDir = join(downloadsDir, target.tag ?? target.to)
+  const zipPath = join(tagDir, `${target.tag ?? target.to}.zip`)
+  const cleanupDownloads = (): void => {
+    try { rmSync(tagDir, { recursive: true, force: true }) } catch { /* best effort */ }
+  }
+  try { rmSync(tagDir, { recursive: true, force: true }) } catch { /* best effort */ }
+  try { mkdirSync(tagDir, { recursive: true }) } catch { /* best effort */ }
+
+  // 1. download (.part → rename)
+  events.phase('downloading', target.assetUrl)
+  const dl = await downloadAsset(target.assetUrl, zipPath, events, signal)
+  if (!dl.ok) {
+    if (dl.cancelled) return { status: 'cancelled' }
+    cleanupDownloads()
+    return { status: 'failed', step: 'download', message: dl.message.slice(-500) }
+  }
+
+  // 2. verify size + sha256 against the manifest
+  events.phase('verifying', 'sha256 + size')
+  let size = 0
+  try { size = statSync(zipPath).size } catch { /* 0 */ }
+  if (target.assetSize !== undefined && size !== target.assetSize) {
+    cleanupDownloads()
+    return { status: 'failed', step: 'verify', message: `size mismatch: expected ${target.assetSize}, got ${size}` }
+  }
+  const sha = await sha256File(zipPath).catch(() => '')
+  if (sha === '' || (target.assetSha256 !== undefined && sha !== target.assetSha256)) {
+    cleanupDownloads()
+    return { status: 'failed', step: 'verify', message: 'sha256 mismatch (artifact integrity check failed)' }
+  }
+
+  // 3. extract into the build dir and validate
+  const ex = await extractAsset(zipPath, buildDir, target.to, events, signal)
+  if (!ex.ok) {
+    if (ex.cancelled) return { status: 'cancelled' }
+    cleanupDownloads()
+    try { rmSync(buildDir, { recursive: true, force: true }) } catch { /* best effort */ }
+    return { status: 'failed', step: 'extract', message: ex.message.slice(-500) }
+  }
+  cleanupDownloads()
+  return { status: 'ready', from: target.from, to: target.to, tag: target.tag }
+}
+
+/** Stream-download a URL to destZip via a `.part` temp file (redirect-following, abortable). */
+export async function downloadAsset(
+  url: string,
+  destZip: string,
+  events: UpgradeEvents,
+  signal?: AbortSignal,
+): Promise<{ ok: true } | { ok: false; message: string; cancelled: boolean }> {
+  const part = `${destZip}.part`
+  try { mkdirSync(parentOf(destZip), { recursive: true }) } catch { /* best effort */ }
+  try { rmSync(part, { force: true }) } catch { /* best effort */ }
+  return new Promise((resolve) => {
+    let finished = false
+    let ignoreError = false
+    const done = (r: { ok: true } | { ok: false; message: string; cancelled: boolean }): void => {
+      if (!finished) { finished = true; resolve(r) }
+    }
+    const req = httpGetByScheme(url, { headers: { 'User-Agent': 'dsh-desktop-updater' } }, (res) => {
+      const status = res.statusCode ?? 0
+      if (status >= 300 && status < 400 && res.headers.location !== undefined) {
+        ignoreError = true
+        res.resume()
+        req.destroy()
+        void downloadAsset(new URL(res.headers.location, url).toString(), destZip, events, signal).then(done)
+        return
+      }
+      if (status !== 200) {
+        res.resume()
+        done({ ok: false, message: `HTTP ${status} from ${url}`, cancelled: false })
+        return
+      }
+      const total = Number(res.headers['content-length'] ?? 0)
+      const out = createWriteStream(part)
+      let received = 0
+      res.on('data', (chunk: Buffer) => {
+        received += chunk.length
+        events.progress?.(received, total)
+      })
+      res.pipe(out)
+      out.on('finish', () => {
+        try { renameSync(part, destZip) } catch (err) { done({ ok: false, message: String(err), cancelled: false }); return }
+        done({ ok: true })
+      })
+      const fail = (err: unknown): void => {
+        try { rmSync(part, { force: true }) } catch { /* best effort */ }
+        done({ ok: false, message: String(err), cancelled: false })
+      }
+      out.on('error', fail)
+      res.on('error', fail)
+    })
+    req.on('error', (err) => {
+      if (ignoreError) return
+      try { rmSync(part, { force: true }) } catch { /* best effort */ }
+      done({ ok: false, message: String(err), cancelled: false })
+    })
+    const onAbort = (): void => {
+      try { rmSync(part, { force: true }) } catch { /* best effort */ }
+      done({ ok: false, message: 'cancelled', cancelled: true })
+      req.destroy()
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    req.on('close', () => signal?.removeEventListener('abort', onAbort))
+  })
+}
+
+/** SHA-256 of a file (streamed). */
+export async function sha256File(filePath: string): Promise<string> {
+  const hash = createHash('sha256')
+  await new Promise<void>((resolve, reject) => {
+    const stream = createReadStream(filePath)
+    stream.on('data', (chunk) => hash.update(chunk as Buffer))
+    stream.on('end', () => resolve())
+    stream.on('error', (err) => reject(err))
+  })
+  return hash.digest('hex')
+}
+
+/** Unzip an artifact into the build dir and validate the backend entry + version. */
+export async function extractAsset(
+  zipPath: string,
+  buildDir: string,
+  expectedVersion: string,
+  events: UpgradeEvents,
+  signal?: AbortSignal,
+): Promise<{ ok: true } | { ok: false; message: string; cancelled: boolean }> {
+  try { rmSync(buildDir, { recursive: true, force: true }) } catch { /* best effort */ }
+  try { mkdirSync(parentOf(buildDir), { recursive: true }) } catch { /* best effort */ }
+  try { mkdirSync(buildDir, { recursive: true }) } catch { /* best effort */ }
+  events.phase('extracting', zipPath)
+  // darwin/win32 ship bsdtar (zip-capable); linux gnu tar cannot read zip → use unzip.
+  const extract =
+    process.platform === 'linux'
+      ? await run('unzip', ['-q', zipPath, '-d', buildDir], { cwd: parentOf(buildDir), env: process.env, events, signal, timeoutMs: 15 * 60_000 })
+      : await run('tar', ['-xf', zipPath, '-C', buildDir], { cwd: parentOf(buildDir), env: process.env, events, signal, timeoutMs: 15 * 60_000 })
+  if (extract.killed) return { ok: false, message: 'cancelled', cancelled: true }
+  if (extract.code !== 0) {
+    return { ok: false, message: `extract failed: ${extract.tail.slice(-500)}`, cancelled: false }
+  }
+  if (!existsSync(join(buildDir, 'apps', 'cli', 'lib', 'bin.js'))) {
+    return { ok: false, message: 'artifact is missing the backend entry (apps/cli/lib/bin.js)', cancelled: false }
+  }
+  const vj = join(buildDir, 'version.json')
+  let versionOk = false
+  if (existsSync(vj)) {
+    try {
+      const v = JSON.parse(readFileSync(vj, 'utf8')) as { version?: unknown }
+      versionOk = typeof v.version === 'string' && v.version === expectedVersion
+    } catch { /* treated as mismatch */ }
+  }
+  if (!versionOk) {
+    return { ok: false, message: `artifact version mismatch: expected ${expectedVersion}`, cancelled: false }
+  }
+  return { ok: true }
+}
+
 function cleanupBuildDir(buildDir: string): void {
   try { rmSync(buildDir, { recursive: true, force: true }) } catch { /* best effort */ }
 }
@@ -626,12 +1026,15 @@ export async function applyBuiltUpdate(
   const harness = settings.harnessDir
   const backup = `${harness}-old`
   const gitBinResolved = gitBin(settings, process.env)
-  const fromCommit = gitSync(settings, ['rev-parse', 'HEAD']).out
+  const hasGit = existsSync(join(harness, '.git'))
+  const fromCommit = hasGit
+    ? gitSync(settings, ['rev-parse', 'HEAD']).out
+    : currentVersion(harness, settings).version
 
   if (!existsSync(join(buildDir, 'apps', 'cli', 'lib', 'bin.js'))) {
     return { status: 'failed', step: 'validate', message: `build dir missing backend entry: ${buildDir}` }
   }
-  if (!existsSync(join(harness, '.git'))) {
+  if (settings.updateSource === 'source' && !hasGit) {
     return { status: 'failed', step: 'validate', message: 'run dir is missing .git; cannot migrate repository state' }
   }
 
@@ -651,18 +1054,21 @@ export async function applyBuiltUpdate(
     return { status: 'failed', step: 'validate promoted', message: 'promoted harness is missing the backend entry' }
   }
 
-  // 3. migrate .git and align HEAD
-  try {
-    renameSync(join(backup, '.git'), join(harness, '.git'))
-    const res = spawnSync(gitBinResolved, ['reset', '--hard', toCommit], {
-      cwd: harness, encoding: 'utf8', timeout: 60_000,
-    })
-    if (res.status !== 0) throw new Error((res.stderr ?? res.stdout ?? '').slice(-800))
-  } catch (err) {
-    // roll back: restore the backup
-    try { rmSync(harness, { recursive: true, force: true }) } catch { /* best effort */ }
-    try { renameSync(backup, harness) } catch { /* best effort */ }
-    return { status: 'failed', step: 'migrate git', message: String(err) }
+  // 3. migrate .git and align HEAD (source channel / git-backed run dir only;
+  //    the release channel ships a version.json instead of a repository)
+  if (hasGit) {
+    try {
+      renameSync(join(backup, '.git'), join(harness, '.git'))
+      const res = spawnSync(gitBinResolved, ['reset', '--hard', toCommit], {
+        cwd: harness, encoding: 'utf8', timeout: 60_000,
+      })
+      if (res.status !== 0) throw new Error((res.stderr ?? res.stdout ?? '').slice(-800))
+    } catch (err) {
+      // roll back: restore the backup
+      try { rmSync(harness, { recursive: true, force: true }) } catch { /* best effort */ }
+      try { renameSync(backup, harness) } catch { /* best effort */ }
+      return { status: 'failed', step: 'migrate git', message: String(err) }
+    }
   }
 
   // 4. cleanup backup

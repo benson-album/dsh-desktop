@@ -58,6 +58,9 @@ export interface UpdateStateInfo {
   buildError?: string
   startedAt: number
   finishedAt: number
+  source?: 'release' | 'source'
+  assetUrl?: string
+  progress?: { received: number; total: number }
 }
 
 /* ─────────────── immersive window: injected drag region ─────────────── */

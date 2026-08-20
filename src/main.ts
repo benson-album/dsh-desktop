@@ -24,8 +24,8 @@ import {
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
-  DEFAULT_REMOTE, applyBuiltUpdate, buildUpdate, checkForUpdates, defaultUpdateState,
-  describeHarness, extractBundle, harnessEnv, loadUpdateState, saveUpdateState,
+  DEFAULT_REMOTE, DEFAULT_RELEASE_REPO, applyBuiltUpdate, checkForUpdates, defaultUpdateState,
+  describeHarness, extractBundle, harnessEnv, loadUpdateState, produceUpdate, saveUpdateState,
   type HarnessSnapshot, type UpdateStateFile, type UpgradeEvents, type UpgradeSettings,
 } from './upgrade.js'
 import { MENU_STRINGS, resolveMenuLanguage } from './i18n.js'
@@ -53,6 +53,9 @@ function defaultSettings(): AppSettings {
     channel: 'tag',
     tagPrefix: 'dsh-v',
     remote: DEFAULT_REMOTE,
+    updateSource: 'release',
+    releaseRepo: DEFAULT_RELEASE_REPO,
+    releaseAssetPattern: 'DeepSeek-Harness-*-<os>-<arch>.zip',
     autoCheck: true,
     autoCheckIntervalMs: 6 * 3600_000,
     backendPort: 0,
@@ -367,6 +370,7 @@ function closeProgressWindow(): void {
 
 const UPDATE_STATE_FILE = join(APP_HOME, 'update-state.json')
 const BUILD_DIR = join(APP_HOME, 'harness-new')
+const DOWNLOADS_DIR = join(APP_HOME, 'downloads')
 /** Bundled harness archive (Resources/harness-bundle.tar.gz in the packaged app). */
 const BUNDLE_ARCHIVE = join(process.resourcesPath ?? '', 'harness-bundle.tar.gz')
 
@@ -377,14 +381,25 @@ let updateBusy = false
 function setUpdateState(patch: Partial<UpdateStateFile>): void {
   updateState = { ...updateState, ...patch }
   saveUpdateState(UPDATE_STATE_FILE, updateState)
-  mainWindow?.webContents.send('dsh:update-event', updateState)
+  broadcastUpdateState()
   log(`[update] state=${updateState.state}${updateState.tag !== undefined ? ` tag=${updateState.tag}` : ''}`)
+}
+
+/** Broadcast the in-memory state without persisting (download progress is high-frequency). */
+function broadcastUpdateState(): void {
+  mainWindow?.webContents.send('dsh:update-event', updateState)
 }
 
 function upgradeEvents(): UpgradeEvents {
   return {
     phase: (phase, detail) => log(`[update] ${phase}${detail !== undefined ? ` — ${detail}` : ''}`),
     log: (line) => log(`[update] ${line}`),
+    // Download progress: broadcast only (update-state.json is persisted on state
+    // transitions, not per chunk).
+    progress: (received, total) => {
+      updateState = { ...updateState, progress: { received, total } }
+      broadcastUpdateState()
+    },
   }
 }
 
@@ -403,8 +418,10 @@ function recoverUpdateState(): void {
       } catch (err) { log(`[update] recovery failed: ${String(err)}`) }
     }
     setUpdateState(defaultUpdateState())
-  } else if (updateState.state === 'building') {
+  } else if (updateState.state === 'building' || updateState.state === 'downloading' || updateState.state === 'extracting') {
+    // interrupted mid-production: drop the candidate dir and any partial downloads
     try { rmSync(BUILD_DIR, { recursive: true, force: true }) } catch { /* best effort */ }
+    try { rmSync(DOWNLOADS_DIR, { recursive: true, force: true }) } catch { /* best effort */ }
     setUpdateState(defaultUpdateState())
   } else if (updateState.state === 'applied' || updateState.state === 'failed') {
     // applied: consumed; failed: a fresh launch re-checks anyway — never
@@ -414,16 +431,17 @@ function recoverUpdateState(): void {
 }
 
 /**
- * Background-first update pipeline: check (pure fetch) -> build in BUILD_DIR
- * while the old version keeps serving -> ready (toast in the GUI).
+ * Background-first update pipeline: check -> produce the candidate in BUILD_DIR
+ * (release channel: download+verify+extract; source channel: git+build) while
+ * the old version keeps serving -> ready (toast in the GUI).
  */
 async function runUpdateCheck(manual: boolean): Promise<void> {
   if (updateBusy) return
-  if (updateState.state === 'building' || updateState.state === 'ready') {
+  if (updateState.state === 'building' || updateState.state === 'downloading' || updateState.state === 'extracting' || updateState.state === 'ready') {
     if (manual) {
       const detail = updateState.state === 'ready'
         ? `新版本 ${updateState.tag ?? updateState.toCommit.slice(0, 12)} 已就绪，点右下角提示条更新`
-        : '新版本正在后台构建中…完成后会提示你'
+        : '新版本正在后台准备中…完成后会提示你'
       void dialog.showMessageBox({ type: 'info', message: detail, buttons: ['好'] })
     }
     return
@@ -434,20 +452,24 @@ async function runUpdateCheck(manual: boolean): Promise<void> {
     const result = await checkForUpdates(settings, process.env, upgradeEvents())
     if (result.status === 'update-available') {
       log(`[update] found ${result.tag ?? result.targetName} (${result.from.slice(0, 12)} -> ${result.to.slice(0, 12)})`)
+      const producingState = settings.updateSource === 'release' ? 'downloading' : 'building'
       setUpdateState({
-        state: 'building', fromCommit: result.from, toCommit: result.to,
-        tag: result.tag, targetName: result.targetName, startedAt: Date.now(), finishedAt: 0,
+        state: producingState, fromCommit: result.from, toCommit: result.to,
+        tag: result.tag, targetName: result.targetName, source: settings.updateSource,
+        assetUrl: result.assetUrl, startedAt: Date.now(), finishedAt: 0, progress: undefined,
       })
       updateSignal = new AbortController()
-      const built = await buildUpdate(settings, process.env, BUILD_DIR, result.to, result.tag, upgradeEvents(), updateSignal.signal)
+      const produced = await produceUpdate(
+        settings, process.env, BUILD_DIR, DOWNLOADS_DIR, result, upgradeEvents(), updateSignal.signal,
+      )
       updateSignal = null
-      if (built.status === 'ready') {
-        setUpdateState({ state: 'ready', finishedAt: Date.now() })
-        log(`[update] build ready: ${built.tag ?? built.to.slice(0, 12)}`)
-      } else if (built.status === 'failed') {
-        setUpdateState({ state: 'failed', buildError: `${built.step}: ${built.message.slice(-500)}`, finishedAt: Date.now() })
+      if (produced.status === 'ready') {
+        setUpdateState({ state: 'ready', finishedAt: Date.now(), progress: undefined })
+        log(`[update] candidate ready: ${produced.tag ?? produced.to.slice(0, 12)}`)
+      } else if (produced.status === 'failed') {
+        setUpdateState({ state: 'failed', buildError: `${produced.step}: ${produced.message.slice(-500)}`, finishedAt: Date.now(), progress: undefined })
       } else {
-        setUpdateState({ state: 'idle', finishedAt: Date.now() })
+        setUpdateState({ state: 'idle', finishedAt: Date.now(), progress: undefined })
       }
     } else if (result.status === 'failed' || result.status === 'no-target' || result.status === 'not-a-repo') {
       const detail = 'message' in result ? result.message : (result as { detail?: string }).detail ?? ''
@@ -599,6 +621,16 @@ function harnessSnapshot(): HarnessSnapshot {
   return describeHarness(settings, process.env)
 }
 
+/** Human-readable byte size (for the About download progress line). */
+function fmtBytes(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '—'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let i = 0
+  let v = n
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++ }
+  return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)} ${units[i]}`
+}
+
 /**
  * Aggregate startup/runtime diagnostics into one text blob — the "debug"
  * feature: `--debug` logs it at startup, and the menu item writes it to
@@ -621,10 +653,12 @@ function buildDiagnostics(): string {
     `harness dirty    : ${s.dirty}`,
     `git remote       : ${remoteOf(settings.harnessDir)}`,
     `menu language    : ${resolveMenuLanguage(settings.dshHome, app.getPreferredSystemLanguages())}`,
+    `update source    : ${settings.updateSource} (repo=${settings.releaseRepo})`,
     `update state     : ${updateState.state}${updateState.tag !== undefined ? ` (${updateState.tag})` : ''}`,
     `build error      : ${updateState.buildError ?? '—'}`,
     `backend url      : ${backendUrl ?? '—'}`,
     `build dir        : ${BUILD_DIR} (${existsSync(BUILD_DIR) ? 'exists' : 'absent'})`,
+    `downloads dir    : ${DOWNLOADS_DIR} (${existsSync(DOWNLOADS_DIR) ? 'exists' : 'absent'})`,
     `node             : ${resolveNode(settings, process.env).bin} (${resolveNode(settings, process.env).version ?? '?'})`,
     `pnpm             : ${resolvePnpm(settings, process.env)?.bin ?? 'NOT FOUND (needs pnpm 11)'}`,
     `git              : ${gitBin(settings, process.env)}`,
@@ -674,8 +708,11 @@ function buildMenu(): void {
                 `┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄`,
                 `提交: ${s.commitShort || '（非 git 目录）'}`,
                 `tag: ${s.tag || '—'}`,
-                `更新通道: ${s.channel}`,
+                `更新通道: ${s.channel} / ${settings.updateSource}`,
                 `更新状态: ${updateState.state}${updateState.tag !== undefined ? ` (${updateState.tag})` : ''}`,
+                `${updateState.state === 'downloading' && updateState.progress !== undefined
+                  ? `下载进度: ${fmtBytes(updateState.progress.received)} / ${fmtBytes(updateState.progress.total)}`
+                  : ''}`,
                 `harness 目录: ${s.harnessDir}`,
                 `数据目录 (DSH_HOME): ${settings.dshHome}`,
                 `┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄`,

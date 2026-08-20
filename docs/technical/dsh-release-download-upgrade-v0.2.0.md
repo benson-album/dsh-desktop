@@ -1,8 +1,8 @@
 # 开发设计文档 — 产物下载式自动升级（Release Download Upgrade）
 
-- 文档版本：v0.2.0（⏳ 草案，待评审确认）
+- 文档版本：v0.2.0（✅ 已确认）
 - 日期：2026-08-20
-- 状态：**草案**（未实施；评审确认后按 §12 顺序实施）
+- 状态：**已确认**（2026-08-20），按 §12 顺序实施；既有源码构建式管线完整保留
 - 关联：[PRD-DSH-release-download-upgrade-v0.2.0.md](../prd/PRD-DSH-release-download-upgrade-v0.2.0.md)（🔄 同版本）
 - 既有基线：[dsh-desktop-shell-v0.1.0.md](./dsh-desktop-shell-v0.1.0.md)（源码构建式升级，已实施，**本方案保留其代码路径**）
 - 技术基线：Electron 43.4.0 / electron-builder 26.15.3 / Node ≥22 / pnpm 11 / GitHub Releases

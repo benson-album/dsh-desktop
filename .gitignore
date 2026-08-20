@@ -1,0 +1,13 @@
+node_modules/
+dist/
+release/
+.bootstrap-test/
+.smoke/
+.smoke-firstrun/
+.e2e/
+.builder-cache/
+.electron-cache/
+.pnpm-store/
+build/harness-bundle.tar.gz
+*.log
+.DS_Store

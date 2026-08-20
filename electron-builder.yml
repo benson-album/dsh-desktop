@@ -1,0 +1,39 @@
+appId: ai.deepseek.dsh-desktop
+productName: DeepSeek Harness
+copyright: Copyright © 2026 DeepSeek Harness contributors
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**
+  - package.json
+
+# Bundled first-run harness (built by scripts/bundle-harness.sh as a single
+# tar.gz — a single file avoids electron-builder's node_modules filtering on
+# extraResources and preserves pnpm symlinks). Unpacked to ~/dsh-app/harness
+# on first launch — no git, no network.
+extraResources:
+  - from: build/harness-bundle.tar.gz
+    to: harness-bundle.tar.gz
+
+# Personal-use build: no code-signing identity. macOS Gatekeeper will require
+# right-click -> Open on the first launch of an unsigned app.
+# electronDist points at the already-downloaded Electron build (node_modules/
+# electron/dist), so packaging never touches the network or ~/Library/Caches.
+electronDist: node_modules/electron/dist
+mac:
+  category: public.app-category.developer-tools
+  icon: build/icon.png
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  target:
+    - target: dir
+      arch: [x64]
+    - target: zip
+      arch: [x64]
+
+npmRebuild: false
+electronLanguages: [en, zh_CN]

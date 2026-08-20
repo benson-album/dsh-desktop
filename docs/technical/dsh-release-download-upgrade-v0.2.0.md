@@ -38,7 +38,9 @@
 
 ---
 
-## 3. 发布侧（构建者本地，一次）
+## 3. 发布侧（产物生产与发布）
+
+### 3.1 本地一键发布（发布者手动）
 
 ```
 scripts/publish-release.sh <version> [--repo owner/repo] [--dry-run]
@@ -56,6 +58,53 @@ scripts/publish-release.sh <version> [--repo owner/repo] [--dry-run]
 - **顺序保证**：资产先于清单上传并确认成功（`gh release view` 校验资产存在），再发布清单；设备侧以清单为准，双重校验兜底。
 - **幂等**：同 tag 重复执行覆盖资产与清单，设备检测到清单变化即重新下载。
 - 若不用 `gh` CLI：脚本给出等价 curl 序列（`POST /releases` + `POST /releases/<id>/assets`），并在 README 记录手工步骤。
+
+### 3.2 自动发布流水线（上游同步 + 自动打包上传）
+
+**目标**：`deepseek-ai/deepseek-harness` 上游发布新版（`dsh-v*` tag）后，无需人工干预，自动构建产物并发布到本仓库 Releases；设备端检测逻辑不变（只看本仓库 Release）。
+
+**触发与调度**：
+
+| 项 | 结论 |
+|---|---|
+| 定时轮询 | cron 每 6h（`0 */6 * * *`），可配置；上游 release 事件无法直接订阅（`repository_dispatch` 需上游配合，不采用），轮询是唯一免上游协作的触发方式 |
+| 手动兜底 | `workflow_dispatch`（手动运行 / 强制覆盖重发） |
+| 幂等 | 上游最新 tag 已存在于本仓库 Releases → 直接退出，零成本重跑 |
+
+**工作流（`.github/workflows/auto-release.yml`）步骤**：
+
+```
+1. 检出本仓库（含发布脚本）
+2. 查询上游最新版本：gh api repos/deepseek-ai/deepseek-harness/releases/latest → tag_name
+   （备选：git ls-remote --tags origin 'dsh-v*' 取最新）
+3. 幂等判断：gh api repos/benson-album/dsh-desktop/releases 是否已含该 tag
+   ├─ 已存在 → exit 0（跳过）
+   └─ 未发布 → 继续
+4. 检出上游源码：git clone --depth 1 --branch <tag> https://github.com/deepseek-ai/deepseek-harness.git
+5. 构建 harness：pnpm install（--frozen-lockfile 失败降级 plain）+ pnpm build
+   （注入 DSH_CLIENT_COMMIT_HASH=<tag commit>，打包时写入 version.json{version,commit}）
+6. 打包产物：bundle-harness → electron-builder --mac zip（复用 §3.1 第 2–5 步语义）
+7. 生成 latest.json（sha256 / size / url 按 tag 推导）
+8. 发布：gh release create <tag> --notes <上游 release notes> + 上传 zip；后传 latest.json（顺序保证）
+9. 失败：job 失败 + GitHub 邮件通知；本仓库无半成品（Release 仅在成功后创建），下次 cron 自动重试
+```
+
+**运行环境**：
+
+| 项 | 结论 |
+|---|---|
+| runner | `macos-latest`（x64 目标与本地打包一致；arm64 留后续） |
+| 工具链 | `actions/setup-node`（Node 22 LTS）+ corepack pnpm 11（按上游 `packageManager`）；git 预装 |
+| 磁盘 | 构建区 + bundle 峰值约 3G，macOS runner 默认容量充足 |
+| 额度 | 公开仓库 GitHub Actions 免费（含 macOS runner 分钟数）；每天 1–2 次构建用量远低于额度 |
+
+**版本与产物一致性**：
+
+- 产物 tag 与上游 tag **同名**（`dsh-v*`），设备侧版本对比与下载逻辑零改动。
+- 上游同一 tag 重发内容：流水线按"已存在"跳过（避免重复构建）；如需覆盖，手动 `workflow_dispatch` 传 `force: true` 重新生成（P2）。
+- 上游构建失败（如依赖/网络问题）：job 失败告警，不影响已发布的旧产物，下次轮询自动重试。
+
+**与 §3.1 的关系**：§3.1 脚本是本地手动兜底与流水线的**共同底层**（流水线在 runner 上调用同一套打包/清单逻辑），保证本地与云端产物一致。
 
 ---
 
@@ -193,7 +242,8 @@ export interface UpgradeSettings {
 | `src/upgrade.ts` | 新增 `UpdateSource` 类型与 settings 字段；`currentVersion()`（version.json/git describe 双来源）；`downloadAsset()`（流式下载 + 进度回调 + .part 语义）；`sha256File()`；`extractAsset()`（校验 + 解压 + 入口/版本验证）；状态机增加 `downloading/extracting`；`checkForUpdates`/候选区生产按通道分支；崩溃恢复扩展 |
 | `src/main.ts` | 调度器适配通道；下载进度事件（`dsh:update-event { state:'downloading', progress }`）推送；启动清理 `downloads/` 残留 |
 | `src/preload.ts` | "关于"面板展示下载进度（复用既有状态展示）；就绪提示条沿用，无结构改动 |
-| `scripts/publish-release.sh`（新增） | 发布脚本：打包 → 冒烟 → 清单生成 → gh release 上传（资产先、清单后） |
+| `scripts/publish-release.sh`（新增） | 发布脚本：打包 → 冒烟 → 清单生成 → gh release 上传（资产先、清单后）；本地手动与云端流水线共用 |
+| `.github/workflows/auto-release.yml`（新增） | 自动发布流水线：cron 轮询上游最新 tag → 幂等判断 → 检出/构建/打包 → 创建 Release 上传产物与清单（§3.2） |
 | `scripts/bundle-harness.sh` | 复用；产物 zip 打包路径可复用其产出（另加 `version.json` 写入步骤） |
 | `electron-builder.yml` | 本期无强制改动（可选加 `publish` 配置留后续） |
 | harness 前端 / 后端 | **零改动** |
@@ -211,6 +261,9 @@ export interface UpgradeSettings {
 | 产物通道运行区无 .git | 开发者无法在运行区直接改源码 | 属预期（产物通道面向使用）；开发者可切 `source` 通道或手动 clone 到运行区（文档说明） |
 | 私仓鉴权 | 设备无法匿名下载 | 默认公开 repo；私有场景通过 `releaseManifestUrl` 指向可访问镜像（P2） |
 | 旧壳读新状态文件 | 未知状态处理不当 | `loadUpdateState` 未知 state 回退 idle（现状容错已覆盖，补测试） |
+| 上游 Releases API 限流/网络抖动 | 检测失败、漏发 | job 失败 + 邮件通知；下次 cron 自动重试；`workflow_dispatch` 手动兜底 |
+| 上游构建失败（依赖/环境） | 该版本无产物 | job 失败告警，不产生半成品 Release（Release 仅在成功后创建）；旧产物不受影响 |
+| 轮询时效（最长 6h 延迟） | 设备升级晚于上游发版 | 可调低 cron 间隔；接受轮询延迟为设计取舍 |
 
 ---
 
@@ -226,13 +279,14 @@ export interface UpgradeSettings {
    - 断网 / 哈希错 / 损坏 zip → 清理重试，旧版可用
    - 替换 → 重启 → 新版本生效（version.json 变化）；替换失败回滚
 3. **发布侧演练**：`publish-release.sh --dry-run` 产物 + 清单生成；真实打 tag 上传一次验证设备端拉取。
-4. **手工验收清单（真实桌面）**：
+4. **自动流水线演练**：workflow 三分支验证——（a）上游无新 tag → 跳过；（b）有新 tag → 构建 → Release 出现 → 设备端拉取成功；（c）上游构建失败 → job 失败告警且无半成品 Release。
+5. **手工验收清单（真实桌面）**：
    - [ ] 产物通道：发布新 tag → 后台自动下载解压 → 就绪提示 → 更新 → 重启生效（GUI 全程可用）
    - [ ] 关于面板显示下载进度
    - [ ] 断网/损坏场景提示可重试，无崩溃
    - [ ] 切换 `source` 通道 → 既有源码构建升级端到端回归
    - [ ] 首版解包、⌘U、重启后端、优雅退出、冒烟回归
-5. **回归**：沉浸式窗口（红绿灯/拖拽区）不受影响。
+6. **回归**：沉浸式窗口（红绿灯/拖拽区）不受影响。
 
 ---
 
@@ -241,8 +295,9 @@ export interface UpgradeSettings {
 1. `upgrade.ts`：`UpdateSource` 通道抽象 + `currentVersion` + 下载/校验/解压（单测先行）
 2. 状态机扩展（downloading/extracting）+ 崩溃恢复 + 主进程调度/进度事件
 3. `scripts/publish-release.sh` + 一次真实发布演练（含 `version.json` 写入打包）
-4. 集成测试 + 手工验收 + 源码通道回归
-5. 更新 development-guide（新命令、坑位记录、发布流程）与文档变更记录
+4. `.github/workflows/auto-release.yml` 自动发布流水线 + 三分支演练（跳过/发布/失败）
+5. 集成测试 + 手工验收 + 源码通道回归
+6. 更新 development-guide（新命令、坑位记录、发布流程）与文档变更记录
 
 ---
 
@@ -251,3 +306,4 @@ export interface UpgradeSettings {
 | 版本 | 日期 | 变更 |
 |------|------|------|
 | v0.2.0 | 2026-08-20 | 首次成稿：产物下载式升级技术方案（草案，待评审）；既有源码构建式管线完整保留 |
+| v0.2.0 | 2026-08-20 | 增补 §3.2 自动发布流水线（GitHub Actions 上游同步 + 自动打包上传），并同步改动清单/风险/测试/实施顺序 |

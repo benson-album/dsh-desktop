@@ -13,9 +13,11 @@ const ROOT = path.join(__dirname, '..')
 const SVG_SRC = path.join(ROOT, 'build', 'deepseek-favicon.svg')
 const PNG_OUT = path.join(ROOT, 'build', 'icon.png')
 const SIZE = 1024
+const BG = 824         // 内容安全区（Apple HIG：图标内容约占 80%，四周透明边距）
+                       // 视觉上与其他带边距的系统图标一致（Dock 上约 40px 可见内容）
+const RADIUS = Math.round(BG * 0.22)   // macOS squircle 圆角（约 22%）
+const WHALE = Math.round(BG * 0.6)     // 白鲸渲染尺寸（蓝底内 60%，四周留边距）
 const BRAND_BLUE = '#4D6BFE'
-const RADIUS = 225      // macOS squircle 圆角（约 22%）
-const WHALE = 620       // 白鲸渲染尺寸（画布的 ~60%，四周留边距）
 
 async function main() {
   const svg = fs.readFileSync(SVG_SRC)
@@ -27,27 +29,33 @@ async function main() {
     .png()
     .toBuffer()
 
-  // 品牌蓝背景
+  // 品牌蓝底（824×824 安全区内，非全幅）
   const bgPng = await sharp({
-    create: { width: SIZE, height: SIZE, channels: 4, background: { r: 0x4d, g: 0x6b, b: 0xfe, alpha: 255 } },
+    create: { width: BG, height: BG, channels: 4, background: { r: 0x4d, g: 0x6b, b: 0xfe, alpha: 255 } },
   }).png().toBuffer()
 
-  // 合成：蓝底 + 白鲸居中
-  const composed = await sharp(bgPng)
-    .composite([{ input: whalePng, left: (SIZE - WHALE) / 2, top: (SIZE - WHALE) / 2 }])
+  // 蓝底圆角（macOS squircle 近似）
+  const bgMaskSvg = Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${BG}" height="${BG}">` +
+    `<rect width="${BG}" height="${BG}" rx="${RADIUS}" ry="${RADIUS}" fill="white"/></svg>`,
+  )
+  const bgMask = await sharp(bgMaskSvg).png().toBuffer()
+  const roundedBg = await sharp(bgPng).composite([{ input: bgMask, blend: 'dest-in' }]).png().toBuffer()
+
+  // 透明 1024 画布：圆角蓝底 + 白鲸居中
+  const canvas = await sharp({
+    create: { width: SIZE, height: SIZE, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+  }).png().toBuffer()
+  const icon = await sharp(canvas)
+    .composite([
+      { input: roundedBg, left: (SIZE - BG) / 2, top: (SIZE - BG) / 2 },
+      { input: whalePng, left: (SIZE - WHALE) / 2, top: (SIZE - WHALE) / 2 },
+    ])
     .png()
     .toBuffer()
 
-  // 圆角裁剪（macOS squircle 近似）
-  const maskSvg = Buffer.from(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}">` +
-    `<rect width="${SIZE}" height="${SIZE}" rx="${RADIUS}" ry="${RADIUS}" fill="white"/></svg>`,
-  )
-  const mask = await sharp(maskSvg).png().toBuffer()
-  const icon = await sharp(composed).composite([{ input: mask, blend: 'dest-in' }]).png().toBuffer()
-
   fs.writeFileSync(PNG_OUT, icon)
-  console.log(`icon written: ${PNG_OUT} (${icon.length} bytes)`)
+  console.log(`icon written: ${PNG_OUT} (${icon.length} bytes, 蓝底 ${BG}×${BG} 安全区)`)
 }
 
 main().catch((err) => { console.error(err.message); process.exit(1) })

@@ -66,12 +66,20 @@ jobs:
           git clone --depth 1 --branch "${{ steps.upstream.outputs.tag }}" \
             https://github.com/deepseek-ai/deepseek-harness.git harness-src
 
+      - name: Resolve upstream commit
+        id: commit
+        if: steps.idem.outputs.skip != 'true'
+        working-directory: harness-src
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Build harness (upstream)
         if: steps.idem.outputs.skip != 'true'
         working-directory: harness-src
         env:
-          # repositoryCommitHash() 优先读该变量，绕开构建目录无 .git 的问题（K-14）
-          DSH_CLIENT_COMMIT_HASH: ${{ steps.upstream.outputs.tag }}
+          # repositoryCommitHash() 优先读该变量，绕开构建目录无 .git 的问题（K-14）；
+          # 必须是 commit hash（40 位十六进制），tag 名会被上游校验拒绝
+          DSH_CLIENT_COMMIT_HASH: ${{ steps.commit.outputs.sha }}
         run: |
           pnpm install --frozen-lockfile || pnpm install
           pnpm build

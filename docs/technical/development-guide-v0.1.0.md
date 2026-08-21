@@ -46,6 +46,10 @@ workspace/deepseek-harness-app/
 pnpm install                                   # 装 electron/electron-builder/tsc/sharp
 pnpm build                                     # tsc + 拷贝 progress.html → dist/
 
+# 单元测试（release 通道：清单解析/os+arch 匹配/下载/校验/解压/全流程，本地 HTTP 假发布源）
+pnpm test:release                              # 需先 pnpm build
+pnpm test                                      # build + test:release
+
 # 内置 bundle（必须先做，否则 .app 无法首次解包）
 bash scripts/bundle-harness.sh                 # 参考源默认 .bootstrap-test/harness（git 仓库）
 # 参考源必须满足：已 pnpm build + 是完整 git 仓库（缺 .git 脚本直接报错）
@@ -60,6 +64,23 @@ ELECTRON_BUILDER_CACHE="$PWD/.builder-cache" \
 # 同步到 /Applications（用户实际运行位置）
 rm -rf "/Applications/DeepSeek Harness.app" && cp -R "release/mac/DeepSeek Harness.app" /Applications/
 ```
+
+### 产物下载式发布（v0.2.0，替代手工 git 升级链路）
+
+```bash
+# 发布「内容 tar.gz + latest.json」到 GitHub Releases（设备端据此自动升级）
+bash scripts/publish-release.sh 0.2.0 --repo benson-album/dsh-desktop --dry-run   # 只打包不传
+DSH_RELEASE_REF=~/path/to/built-checkout bash scripts/publish-release.sh 0.2.0     # 真实发布
+# 产物：build/release-artifacts/DeepSeek-Harness-<ver>-<os>-<arch>.tar.gz + latest.json
+# 注意：产物为 tar.gz 而非 zip——node_modules 海量小文件下 zip 打包不可行（实测卡死），
+#       tar 打包约 1-2 分钟，且 darwin/win32（bsdtar）/linux（gnu tar）系统 tar 均原生解压。
+```
+
+自动流水线（上游 deepseek-harness 发新版后自动打包上传）由
+`.github/workflows/auto-release.yml` 承担：cron 每 6h 轮询上游最新 `dsh-v*` tag →
+幂等判断（已发布则跳过）→ 检出上游源码 → `pnpm install + build` → 打包 tar.gz +
+latest.json → 创建本仓库 Release（资产先、清单后）。手动触发：仓库 Actions 页
+`workflow_dispatch`（可传 `force` 覆盖重发）。
 
 > 图标再生成：`node scripts/gen-icon.js`（源 `build/deepseek-favicon.svg`，输出 `build/icon.png`，electron-builder 自动转 icns）。
 
@@ -103,6 +124,9 @@ rm -rf "/Applications/DeepSeek Harness.app" && cp -R "release/mac/DeepSeek Harne
 | K-12 | 菜单语言不随 dsh-app 语种即时切换 | 无监听 | `fs.watch(settings.yaml)` → debounce 500ms → 重建菜单（`buildMenu`） | 运行时改 settings.yaml，日志出现三次 `[menu] language=` |
 | K-13 | 换设备（Linux/Windows/其他安装方式）后构建工具找不到 | 工具发现写死 macOS 路径 | 跨设备解析：settings/env pin > PATH > 平台目录（darwin/linux/win 分支）> corepack > npx pnpm@11；后端用解析出的 node 绝对路径 | 精简 PATH 模拟 + 平台目录单测 |
 | K-14 | 自动更新构建失败：`pnpm build` 报 git `status: 128`（堆栈在 harness `scripts/build.ts` 的 `repositoryCommitHash` 调用处） | rc.8 起 harness 构建脚本执行 `git rev-parse HEAD` 取提交哈希，但构建区是 `git archive` 导出的快照（**无 .git**），git 以 128 退出 | `buildUpdate` 向构建环境注入 `DSH_CLIENT_COMMIT_HASH=<toCommit>`——harness 的 `repositoryCommitHash()` 优先读该环境变量，绕开对 .git 的依赖（保持"零 harness 改动"约束） | 端到端：驱动 `dist/upgrade.js` 对 rc.8 目标提交真实构建成功；应用内重试更新通过 |
+| K-15 | 升级点"立即更新"后提示"运行区有未提交的修改，无法替换" | 替换会 `git reset --hard` 到新版本，为保护未提交改动，`applyReadyUpdate` 在 dirty 时拒绝（设计约束）；运行区变脏常来自测试残留/误删（实例：e2e 测试后 `scripts/release/` 整目录被删，9 个 tracked 文件丢失） | 运行区执行 `git status --porcelain` 定位；确认可放弃的改动用 `git checkout -- <path>` 恢复（内容在 git 里，无损）或 `git stash`；无法恢复时删除运行区重启重新解包；提示文案改为显示实际 `settings.harnessDir` | `git status --porcelain` 为空后重试升级成功 |
+| K-16 | 检查更新报 `failed: https://github.com/<repo>/releases/latest/download/latest.json: HTTP 404` | 默认 `updateSource: 'release'` 从 GitHub Releases 下载清单，但目标仓库未发布含 `latest.json` 的 release（或 releaseRepo 配错），404 必然复现 | 发布资产未就绪时在 `settings.json` 写 `"updateSource": "source"` 切回 git 源码构建式（K-14 路径，立即可用）；要走 release 通道则先发布 `latest.json` + 平台 tar.gz 资产 | `checkForUpdates` 返回 up-to-date / update-available，不再 404 |
+| K-17 | 发布脚本打包产物时 `zip` 长时间卡死（node_modules 数十万小文件 + pnpm 符号链接） | macOS 自带 zip 对海量小文件逐文件压缩，1.4G stage 数十分钟无进展（默认与 -1 级别均不可行） | 产物格式定为 **tar.gz**：`tar -czf` 约 1-2 分钟完成且保留符号链接；设备端 `tar -xzf` 在 darwin/win32（bsdtar）与 linux（gnu tar）均原生支持，无 unzip 依赖 | `publish-release.sh --dry-run` 约 80s 完成；`extractAsset` 三平台语义一致 |
 
 ## 7. 关键设计约束（改代码前先理解，勿破坏）
 
@@ -129,10 +153,19 @@ rm -rf "/Applications/DeepSeek Harness.app" && cp -R "release/mac/DeepSeek Harne
 
 ## 9. 发布流程（供后续版本复用）
 
+**壳与首次内置（沿用）**：
+
 1. `pnpm build` → `bash scripts/bundle-harness.sh`（git 参考源）→ `pnpm pack:dir` → 冒烟（dev + packaged + firstrun）→ 升级端到端抽查
 2. 同步 `/Applications` 并提示用户 `killall Dock`（图标缓存）+ 重启 app
 3. `electron-builder --mac zip` 产出分发包
 4. 更新 PRD/technical/本指南的变更记录与版本
+
+**产物下载式升级发布（v0.2.0，主通道）**：
+
+1. `pnpm test:release`（单元测试全绿）
+2. `bash scripts/publish-release.sh <version> --dry-run`（本地产出 tar.gz + latest.json 并核对清单）
+3. 真实发布：`DSH_RELEASE_REF=<已构建 checkout> bash scripts/publish-release.sh <version>`
+4. 自动流水线兜底：`.github/workflows/auto-release.yml` 每 6h 检测上游新版自动打包上传（设备端零操作）
 
 ---
 
@@ -142,3 +175,6 @@ rm -rf "/Applications/DeepSeek Harness.app" && cp -R "release/mac/DeepSeek Harne
 |------|------|------|
 | v0.1 | 2026-08-20 | 首次成稿：环境/构建/测试/架构速览 + 13 条已知坑位与修复记录（K-1~K-13）+ 10 条设计约束 + 后续优化项 + 发布流程 |
 | v0.1 | 2026-08-20 | 修订⑤：构建区注入 `DSH_CLIENT_COMMIT_HASH` 修复 rc.8 起 `pnpm build` 失败（K-14） |
+| v0.1 | 2026-08-20 | 修订⑥：运行区脏阻塞升级的排查与自救入档（K-15）；dirty 提示文案改为显示实际运行区路径 |
+| v0.1 | 2026-08-20 | 修订⑦：release 通道 404 排查入档（K-16）；settings.json 支持 `updateSource`/`releaseRepo`/`releaseAssetPattern` |
+| v0.1 | 2026-08-20 | 修订⑧：产物下载式升级实施落地——`pnpm test:release` 单测、`scripts/publish-release.sh` 发布脚本、`.github/workflows/auto-release.yml` 自动流水线；产物格式定 tar.gz（K-17：zip 打包在海量小文件下不可行） |

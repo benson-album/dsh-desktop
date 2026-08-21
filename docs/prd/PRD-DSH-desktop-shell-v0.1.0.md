@@ -222,3 +222,5 @@ DeepSeek Harness 的 Web GUI 目前通过浏览器访问（`dsh --profile web` �
 | v0.1.0 | 2026-08-18 | 修订③：跨设备依赖发现（NFR-7/K-13）；运行区缺 .git 明确提示；启动不残留失败状态（K-9） |
 | v0.1.0 | 2026-08-20 | 修订④：全部坑位与修复记录入档（见 [开发指南](../technical/development-guide-v0.1.0.md) §6） |
 | v0.1.0 | 2026-08-20 | 修订⑤：自动更新构建区注入 `DSH_CLIENT_COMMIT_HASH`，修复 rc.8 起 `pnpm build` 因构建区无 `.git` 而失败（K-14，FR-D4.3） |
+| v0.1.0 | 2026-08-20 | 修订⑥：dirty 提示文案显示实际运行区路径；运行区脏阻塞升级排查入档（K-15，FR-D4.5） |
+| v0.1.0 | 2026-08-20 | 修订⑦：release 更新通道（latest.json 清单下载式）配置入档；release 404 排查入档（K-16，FR-D4.2） |

@@ -180,7 +180,7 @@ pnpm build（lib + web，构建环境注入 DSH_CLIENT_COMMIT_HASH=<toCommit>，
 ### 6.4 替换与重启（FR-D4.5 / D4.6 / D4.7）
 
 ```
-前置：运行区工作树必须干净（dirty 拒绝替换）
+前置：运行区工作树必须干净（dirty 拒绝替换，排查见 K-15）
 stopBackend()（~1s）
 rm -rf harness-old; mv harness harness-old; mv harness-new harness
 验证 bin.js 存在 → 否则回滚（mv harness-old harness）
@@ -205,7 +205,11 @@ state=applied → startBackend() → 弹窗"已生效，建议重启" [立即重
 
 ### 6.5 通道与配置（FR-D4.8）
 
-`settings.json`：`channel: tag|master`、`tagPrefix: dsh-v`、`autoCheck`（默认 true）、`autoCheckIntervalMs`（默认 6h）、`remote`。
+`settings.json`（`~/dsh-app/settings.json`，缺省用代码默认值）：`channel: tag|master`、`tagPrefix: dsh-v`、`autoCheck`（默认 true）、`autoCheckIntervalMs`（默认 6h）、`remote`。
+
+- **更新源** `updateSource`：`release`（默认，从 GitHub Releases 下载预构建包）或 `source`（git 源码构建式，即 §6.2~6.4 的既有管线）。
+  - `release`：清单 URL `https://github.com/<releaseRepo>/releases/latest/download/latest.json`；`releaseRepo`（默认 `benson-album/dsh-desktop`）、`releaseAssetPattern`（默认 `DeepSeek-Harness-*-<os>-<arch>.zip`）匹配当前平台资产；**该仓库必须已发布含 `latest.json` 的 release，否则检查更新报 HTTP 404**。
+  - `source`：git fetch + tag 解析 + 后台构建（K-14 后无 .git 构建区亦可用）。发布资产未就绪时应切回此通道（K-16）。
 
 ### 6.6 更新提示条（FR-D6）
 
@@ -282,3 +286,5 @@ state=applied → startBackend() → 弹窗"已生效，建议重启" [立即重
 | v0.1 | 2026-08-18 | 修订③：跨设备工具发现（§6.5/K-13）；resolvePnpm 内联候选遍历（K-7）；pnpm 版本校验 env（K-5）；CI=true（K-6） |
 | v0.1 | 2026-08-20 | 修订④：启动不残留 failed 状态（K-9）；运行区缺 .git 提示（K-1 补充）；坑位与修复记录独立成档（[开发指南](./development-guide-v0.1.0.md)） |
 | v0.1 | 2026-08-20 | 修订⑤：构建区注入 `DSH_CLIENT_COMMIT_HASH` 修复 rc.8 起 `pnpm build` 失败（§6.3/K-14） |
+| v0.1 | 2026-08-20 | 修订⑥：dirty 提示文案显示实际运行区路径；运行区脏阻塞升级排查入档（§6.4/K-15） |
+| v0.1 | 2026-08-20 | 修订⑦：settings.json 支持 `updateSource`/`releaseRepo`/`releaseAssetPattern`（release 通道，§6.5/K-16）；release 404 排查入档 |

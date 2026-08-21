@@ -9,5 +9,6 @@ release/
 .electron-cache/
 .pnpm-store/
 build/harness-bundle.tar.gz
+build/release-artifacts/
 *.log
 .DS_Store

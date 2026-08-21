@@ -55,7 +55,7 @@ function defaultSettings(): AppSettings {
     remote: DEFAULT_REMOTE,
     updateSource: 'release',
     releaseRepo: DEFAULT_RELEASE_REPO,
-    releaseAssetPattern: 'DeepSeek-Harness-*-<os>-<arch>.zip',
+    releaseAssetPattern: 'DeepSeek-Harness-*-<os>-<arch>.tar.gz',
     autoCheck: true,
     autoCheckIntervalMs: 6 * 3600_000,
     backendPort: 0,
@@ -508,7 +508,7 @@ async function applyReadyUpdate(): Promise<void> {
         await dialog.showMessageBox({
           type: 'warning',
           message: '运行区有未提交的修改，无法替换',
-          detail: '替换会重置运行区（~/.dsh-app/harness）到新版本。请先提交或 stash 其中的改动，或删除后让应用重新解包。',
+          detail: `替换会重置运行区（${settings.harnessDir}）到新版本。请先提交或 stash 其中的改动，或删除后让应用重新解包。`,
           buttons: ['好'],
         })
       }

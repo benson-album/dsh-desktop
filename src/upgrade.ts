@@ -807,7 +807,7 @@ export async function produceUpdate(
     return { status: 'failed', step: 'download', message: 'update-available without assetUrl (release channel)' }
   }
   const tagDir = join(downloadsDir, target.tag ?? target.to)
-  const zipPath = join(tagDir, `${target.tag ?? target.to}.zip`)
+  const zipPath = join(tagDir, `${target.tag ?? target.to}.tar.gz`)
   const cleanupDownloads = (): void => {
     try { rmSync(tagDir, { recursive: true, force: true }) } catch { /* best effort */ }
   }
@@ -925,7 +925,7 @@ export async function sha256File(filePath: string): Promise<string> {
   return hash.digest('hex')
 }
 
-/** Unzip an artifact into the build dir and validate the backend entry + version. */
+/** Unpack a tar.gz artifact into the build dir and validate the backend entry + version. */
 export async function extractAsset(
   zipPath: string,
   buildDir: string,
@@ -937,11 +937,11 @@ export async function extractAsset(
   try { mkdirSync(parentOf(buildDir), { recursive: true }) } catch { /* best effort */ }
   try { mkdirSync(buildDir, { recursive: true }) } catch { /* best effort */ }
   events.phase('extracting', zipPath)
-  // darwin/win32 ship bsdtar (zip-capable); linux gnu tar cannot read zip → use unzip.
-  const extract =
-    process.platform === 'linux'
-      ? await run('unzip', ['-q', zipPath, '-d', buildDir], { cwd: parentOf(buildDir), env: process.env, events, signal, timeoutMs: 15 * 60_000 })
-      : await run('tar', ['-xf', zipPath, '-C', buildDir], { cwd: parentOf(buildDir), env: process.env, events, signal, timeoutMs: 15 * 60_000 })
+  // tar.gz is universal: darwin/win32 ship bsdtar, linux ships gnu tar — no unzip
+  // dependency anywhere (and tar is far faster than zip over pnpm's many small files).
+  const extract = await run('tar', ['-xzf', zipPath, '-C', buildDir], {
+    cwd: parentOf(buildDir), env: process.env, events, signal, timeoutMs: 15 * 60_000,
+  })
   if (extract.killed) return { ok: false, message: 'cancelled', cancelled: true }
   if (extract.code !== 0) {
     return { ok: false, message: `extract failed: ${extract.tail.slice(-500)}`, cancelled: false }

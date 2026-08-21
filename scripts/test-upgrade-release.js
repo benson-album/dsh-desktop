@@ -37,7 +37,7 @@ function makeSettings(over = {}) {
     remote: 'https://github.com/deepseek-ai/deepseek-harness.git',
     updateSource: 'release',
     releaseRepo: 'benson-album/dsh-desktop',
-    releaseAssetPattern: 'DeepSeek-Harness-*-<os>-<arch>.zip',
+    releaseAssetPattern: 'DeepSeek-Harness-*-<os>-<arch>.tar.gz',
     ...over,
   }
 }
@@ -166,16 +166,16 @@ function startServer(payload) {
   }))
 }
 
-/** Build a fake artifact zip: apps/cli/lib/bin.js + version.json at the zip root. */
-function makeArtifactZip(version) {
-  const dir = path.join(TMP, `zip-src-${version.replace(/[^a-zA-Z0-9]/g, '_')}`)
+/** Build a fake artifact tar.gz: apps/cli/lib/bin.js + version.json at the root. */
+function makeArtifactTgz(version) {
+  const dir = path.join(TMP, `tgz-src-${version.replace(/[^a-zA-Z0-9]/g, '_')}`)
   fs.rmSync(dir, { recursive: true, force: true })
   fs.mkdirSync(path.join(dir, 'apps', 'cli', 'lib'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'apps', 'cli', 'lib', 'bin.js'), '#!/usr/bin/env node\nconsole.log("fake backend")\n')
   fs.writeFileSync(path.join(dir, 'version.json'), JSON.stringify({ version, commit: 'deadbeef' }))
-  const zipPath = path.join(TMP, `artifact-${version.replace(/[^a-zA-Z0-9]/g, '_')}.zip`)
-  execSync(`cd ${JSON.stringify(dir)} && zip -qr ${JSON.stringify(zipPath)} .`)
-  return fs.readFileSync(zipPath)
+  const outPath = path.join(TMP, `artifact-${version.replace(/[^a-zA-Z0-9]/g, '_')}.tar.gz`)
+  execSync(`cd ${JSON.stringify(dir)} && tar -czf ${JSON.stringify(outPath)} .`)
+  return fs.readFileSync(outPath)
 }
 
 async function shaOf(buf) {
@@ -187,7 +187,7 @@ async function shaOf(buf) {
 /* ── 5. downloadAsset ─────────────────────────────────────────────────────── */
 
 test('downloadAsset: downloads file with progress events', async () => {
-  const zip = makeArtifactZip('0.2.0')
+  const zip = makeArtifactTgz('0.2.0')
   const { server, port } = await startServer({ manifest: null, zip })
   try {
     const dest = path.join(TMP, 'dl-out.zip')
@@ -203,7 +203,7 @@ test('downloadAsset: downloads file with progress events', async () => {
 })
 
 test('downloadAsset: follows redirects', async () => {
-  const zip = makeArtifactZip('0.2.0')
+  const zip = makeArtifactTgz('0.2.0')
   const { server, port } = await startServer({ manifest: null, zip })
   try {
     const dest = path.join(TMP, 'dl-redir.zip')
@@ -214,7 +214,7 @@ test('downloadAsset: follows redirects', async () => {
 })
 
 test('downloadAsset: abort cancels cleanly', async () => {
-  const zip = makeArtifactZip('0.2.0')
+  const zip = makeArtifactTgz('0.2.0')
   const { server, port } = await startServer({ manifest: null, zip })
   try {
     const dest = path.join(TMP, 'dl-abort.zip')
@@ -231,7 +231,7 @@ test('downloadAsset: abort cancels cleanly', async () => {
 /* ── 6. extractAsset ──────────────────────────────────────────────────────── */
 
 test('extractAsset: valid artifact extracts and passes version check', async () => {
-  const zip = makeArtifactZip('0.3.0')
+  const zip = makeArtifactTgz('0.3.0')
   const zipPath = path.join(TMP, 'ex.zip')
   fs.writeFileSync(zipPath, zip)
   const buildDir = path.join(TMP, 'ex-build')
@@ -242,7 +242,7 @@ test('extractAsset: valid artifact extracts and passes version check', async () 
 })
 
 test('extractAsset: version mismatch fails', async () => {
-  const zip = makeArtifactZip('0.3.0')
+  const zip = makeArtifactTgz('0.3.0')
   const zipPath = path.join(TMP, 'ex2.zip')
   fs.writeFileSync(zipPath, zip)
   const buildDir = path.join(TMP, 'ex2-build')
@@ -266,7 +266,7 @@ test('extractAsset: missing backend entry fails', async () => {
 /* ── 7. checkForUpdates + produceUpdate end-to-end (release channel) ──────── */
 
 test('checkForUpdates: release channel detects update via local manifest', async () => {
-  const zip = makeArtifactZip('0.4.0')
+  const zip = makeArtifactTgz('0.4.0')
   const sha = await shaOf(zip)
   const manifest = {
     schemaVersion: 1, version: '0.4.0', tag: 'dsh-v0.4.0',
@@ -289,7 +289,7 @@ test('checkForUpdates: release channel detects update via local manifest', async
 })
 
 test('checkForUpdates: release channel up-to-date is silent', async () => {
-  const zip = makeArtifactZip('0.5.0')
+  const zip = makeArtifactTgz('0.5.0')
   const sha = await shaOf(zip)
   const manifest = {
     schemaVersion: 1, version: '0.5.0', tag: 'dsh-v0.5.0',
@@ -308,7 +308,7 @@ test('checkForUpdates: release channel up-to-date is silent', async () => {
 })
 
 test('checkForUpdates: no artifact for this platform -> no-target', async () => {
-  const zip = makeArtifactZip('0.6.0')
+  const zip = makeArtifactTgz('0.6.0')
   const manifest = {
     schemaVersion: 1, version: '0.6.0', tag: 'dsh-v0.6.0',
     assets: [{ name: 'other.zip', url: 'http://127.0.0.1:PORT/artifact.zip', sha256: 'x', size: 1, os: 'win32', arch: 'x64' }],
@@ -325,7 +325,7 @@ test('checkForUpdates: no artifact for this platform -> no-target', async () => 
 })
 
 test('produceUpdate: full download -> verify -> extract -> ready', async () => {
-  const zip = makeArtifactZip('0.7.0')
+  const zip = makeArtifactTgz('0.7.0')
   const sha = await shaOf(zip)
   const { server, port } = await startServer({ manifest: null, zip })
   try {
@@ -344,7 +344,7 @@ test('produceUpdate: full download -> verify -> extract -> ready', async () => {
 })
 
 test('produceUpdate: sha256 mismatch fails and cleans up', async () => {
-  const zip = makeArtifactZip('0.8.0')
+  const zip = makeArtifactTgz('0.8.0')
   const { server, port } = await startServer({ manifest: null, zip })
   try {
     const downloadsDir = path.join(TMP, 'dl-dir-080')
@@ -362,7 +362,7 @@ test('produceUpdate: sha256 mismatch fails and cleans up', async () => {
 })
 
 test('produceUpdate: size mismatch fails', async () => {
-  const zip = makeArtifactZip('0.8.1')
+  const zip = makeArtifactTgz('0.8.1')
   const { server, port } = await startServer({ manifest: null, zip })
   try {
     const res = await U.produceUpdate(

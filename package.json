@@ -9,6 +9,8 @@
     "build": "tsc -p tsconfig.json && node -e \"require('node:fs').copyFileSync('src/progress.html','dist/progress.html')\"",
     "start": "npm run build && electron .",
     "smoke": "npm run build && electron . --smoke",
+    "test": "npm run build && node scripts/test-upgrade-release.js",
+    "test:release": "node scripts/test-upgrade-release.js",
     "pack:dir": "npm run build && electron-builder --mac dir",
     "dist": "npm run build && electron-builder --mac"
   },

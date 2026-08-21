@@ -28,12 +28,12 @@
 ├── harness/          ← 运行区（不变；源码通道下带 .git）
 ├── harness-new/      ← 候选区（复用语义：产物通道=下载解压后的完整 checkout；源码通道=构建产物）
 ├── harness-old/      ← 备份区（替换时旧版暂存，不变）
-├── downloads/        ← 【新增】下载临时区：<tag>/DeepSeek-Harness-….zip.part → .zip → 校验后解压
+├── downloads/        ← 【新增】下载临时区：<tag>/DeepSeek-Harness-….tar.gz.part → .tar.gz → 校验后解压
 ├── update-state.json ← 升级状态机持久化（扩展状态值，字段兼容旧版）
 └── settings.json     ← 既有配置（新增字段见 §8）
 ```
 
-- `downloads/` 生命周期：进入 `downloading` 时创建 `<tag>/`，下载、校验、解压完成后整目录清理；启动时发现残留 `.part`/`.zip`（上次中断）自动清理。
+- `downloads/` 生命周期：进入 `downloading` 时创建 `<tag>/`，下载、校验、解压完成后整目录清理；启动时发现残留 `.part`/`.tar.gz`（上次中断）自动清理。
 - `update-state.json` 扩展：`state` 增加 `downloading | extracting`；新增字段 `source`（本次升级的通道）与 `assetUrl`（产物通道记录下载源，便于失败诊断）。旧字段全部保留，**旧版本壳读新状态文件时按未知状态回退 idle**（`loadUpdateState` 已有容错）。
 
 ---
@@ -43,18 +43,19 @@
 ### 3.1 本地一键发布（发布者手动）
 
 ```
-scripts/publish-release.sh <version> [--repo owner/repo] [--dry-run]
-1. 校验 tag 规范（dsh-v<version>，与既有 tagPrefix 对齐）
-2. bash scripts/bundle-harness.sh          # 复用：产出 build/harness-bundle.tar.gz（含构建产物与 node_modules）
-3. pnpm build && pnpm pack:dir             # 壳侧编译（沿用）
-4. electron-builder --mac zip              # 产出 release/DeepSeek-Harness-<version>-mac-x64.zip
-5. 本地冒烟：packaged 启动 + firstrun 解包抽查（复用 scripts/smoke*.sh 语义）
-6. 计算 zip 的 sha256 与大小
+bash scripts/publish-release.sh <version> [--repo owner/repo] [--dry-run]
+1. 校验 version 参数（tag = dsh-v<version>，与既有 tagPrefix 对齐）
+2. 读取参考 checkout（DSH_RELEASE_REF，默认 .bootstrap-test/harness；须已 pnpm build）
+3. tar 管道复制 checkout → stage（排除构建中间产物；node_modules 海量小文件下比 rsync 快一个数量级）
+4. 写入 version.json{version, commit} 到 stage（设备端版本判定依据，见 §5）
+5. tar -czf 打包内容 tar.gz（顶层为内容本身：apps/ package.json node_modules …；-z 保留 pnpm 符号链接）
+6. 计算 tar.gz 的 sha256 与大小
 7. 生成 latest.json（见 §4）               # 注意：此刻不发布清单
-8. gh release create dsh-v<version> --notes "$(git log …)" <zip>   # 先传资产
-9. 上传 latest.json 到同一 Release（或仓库固定路径）                # 后传清单，避免不一致窗口
+8. gh release create dsh-v<version> --notes … <tar.gz>   # 先传资产
+9. gh release upload <tag> latest.json                    # 后传清单，避免不一致窗口
 ```
 
+- **产物格式为 tar.gz 而非 zip**：node_modules 海量小文件 + pnpm 符号链接下，tar 打包比 zip 快一个数量级（实测约 1–2 分钟），且 darwin/win32（bsdtar）与 linux（gnu tar）的系统 tar 均原生支持解压，设备端零额外依赖。
 - **顺序保证**：资产先于清单上传并确认成功（`gh release view` 校验资产存在），再发布清单；设备侧以清单为准，双重校验兜底。
 - **幂等**：同 tag 重复执行覆盖资产与清单，设备检测到清单变化即重新下载。
 - 若不用 `gh` CLI：脚本给出等价 curl 序列（`POST /releases` + `POST /releases/<id>/assets`），并在 README 记录手工步骤。
@@ -83,9 +84,9 @@ scripts/publish-release.sh <version> [--repo owner/repo] [--dry-run]
 4. 检出上游源码：git clone --depth 1 --branch <tag> https://github.com/deepseek-ai/deepseek-harness.git
 5. 构建 harness：pnpm install（--frozen-lockfile 失败降级 plain）+ pnpm build
    （注入 DSH_CLIENT_COMMIT_HASH=<tag commit>，打包时写入 version.json{version,commit}）
-6. 打包产物：bundle-harness → electron-builder 打包（本期 `--mac zip` x64；多架构/跨平台矩阵见 §13）
+6. 打包产物：bash scripts/publish-release.sh <version> --dry-run（内容 tar.gz + latest.json；多架构/跨平台矩阵见 §13）
 7. 生成 latest.json（sha256 / size / url 按 tag 推导；多资产按 os+arch 各一条，见 §13）
-8. 发布：gh release create <tag> --notes <上游 release notes> + 上传 zip；后传 latest.json（顺序保证）
+8. 发布：gh release create <tag> + 上传 tar.gz；后传 latest.json（顺序保证）
 9. 失败：job 失败 + GitHub 邮件通知；本仓库无半成品（Release 仅在成功后创建），下次 cron 自动重试
 ```
 
@@ -119,8 +120,8 @@ scripts/publish-release.sh <version> [--repo owner/repo] [--dry-run]
   "notes": "产物下载式升级 v0.2.0",
   "assets": [
     {
-      "name": "DeepSeek-Harness-0.2.0-darwin-x64.zip",
-      "url": "https://github.com/<owner>/<repo>/releases/download/dsh-v0.2.0/DeepSeek-Harness-0.2.0-darwin-x64.zip",
+      "name": "DeepSeek-Harness-0.2.0-darwin-x64.tar.gz",
+      "url": "https://github.com/<owner>/<repo>/releases/download/dsh-v0.2.0/DeepSeek-Harness-0.2.0-darwin-x64.tar.gz",
       "sha256": "…",
       "size": 536870912,
       "os": "darwin",
@@ -152,7 +153,7 @@ GET https://api.github.com/repos/<owner>/<repo>/releases/latest
         └─ 不同 → downloading（记录 fromVersion/toVersion/assetUrl=匹配条目 url）
 ```
 
-- **本地版本判定**：产物通道下运行区不一定带 `.git`（若从 zip 安装）。新增 `harness/version.json`（发布打包时随产物写入 `{ version, commit }`）；已有 `.git` 时优先 `git describe`（兼容源码通道装出来的运行区）。两种来源统一抽象为 `currentVersion(harnessDir)`。
+- **本地版本判定**：产物通道下运行区不一定带 `.git`（若从 tar.gz 安装）。新增 `harness/version.json`（发布打包时随产物写入 `{ version, commit }`）；已有 `.git` 时优先 `git describe`（兼容源码通道装出来的运行区）。两种来源统一抽象为 `currentVersion(harnessDir)`。
 - 网络失败静默重试（沿用现有 checking 的失败语义）；非 200 / 清单解析失败 → `failed(step='check-release')` 可重试。
 
 ---
@@ -162,24 +163,24 @@ GET https://api.github.com/repos/<owner>/<repo>/releases/latest
 ```
 downloading:
   mkdir -p downloads/<tag>
-  流式下载（§5 匹配到的本机资产 url）→ downloads/<tag>/<name>.zip.part
+  流式下载（§5 匹配到的本机资产 url）→ downloads/<tag>/<name>.tar.gz.part
     （Node 内置 https/net 流式写盘，事件回调推送 bytes/total 进度；
      或 system curl --fail --location --progress-bar 作为 fallback，二选一统一封装）
-  完成后 rename .part → .zip
+  完成后 rename .part → .tar.gz
   校验：stat.size === manifest.size && sha256(file) === manifest.sha256
     ├─ 不符 → 清理 downloads/<tag> → failed(step='verify', message=…)
     └─ 通过 → extracting
 
 extracting:
   rm -rf harness-new && mkdir -p harness-new
-  tar -xzf downloads/<tag>/<name>.zip -C harness-new     # zip 内含顶层目录时展平处理
+  tar -xzf downloads/<tag>/<name>.tar.gz -C harness-new     # zip 内含顶层目录时展平处理
   验证 harness-new/apps/cli/lib/bin.js 存在
   验证 harness-new/version.json.version === manifest.version
     ├─ 任一失败 → 清理 harness-new + downloads/<tag> → failed(step='extract')
     └─ 通过 → state=ready，写 update-state.json（toVersion/assetUrl），推送"新版本 vX 已就绪"
 ```
 
-- 磁盘占用峰值：zip（~500MB–1GB）+ 解压后运行区（~1.2–1.5G）短暂并存；`extracting` 完成即清理 `downloads/<tag>`，替换后清理 `harness-old`（沿用）。
+- 磁盘占用峰值：tar.gz（~400–500MB）+ 解压后运行区（~1.2–1.5G）短暂并存；`extracting` 完成即清理 `downloads/<tag>`，替换后清理 `harness-old`（沿用）。
 - 崩溃恢复：启动时 `state=downloading|extracting` → 清理 `downloads/` 与半成品 `harness-new` → 重置 idle（沿用 `recoverUpdateState` 思路扩展）。
 
 ---
@@ -221,7 +222,7 @@ export interface UpgradeSettings {
   // 新增
   updateSource: UpdateSource       // 默认 'release'
   releaseRepo: string              // 默认 'deepseek-ai/deepseek-harness'（与 DEFAULT_REMOTE 对应，待确认）
-  releaseAssetPattern: string      // 默认 'DeepSeek-Harness-*-mac-x64.zip'
+  releaseAssetPattern: string      // 默认 'DeepSeek-Harness-*-mac-x64.tar.gz'
   releaseManifestUrl?: string      // 显式清单 URL（覆盖默认 raw URL 推导，便于自建镜像）
 }
 ```
@@ -230,7 +231,7 @@ export interface UpgradeSettings {
 |---|---|---|
 | `updateSource` | `release` | 产物下载（默认）或源码构建 |
 | `releaseRepo` | `deepseek-ai/deepseek-harness` | Releases 所在 owner/repo |
-| `releaseAssetPattern` | `DeepSeek-Harness-*-mac-x64.zip` | 产物匹配模式（多平台扩展后为 `DeepSeek-Harness-*-<os>-<arch>.zip`，见 §13） |
+| `releaseAssetPattern` | `DeepSeek-Harness-*-mac-x64.tar.gz` | 产物匹配模式（多平台扩展后为 `DeepSeek-Harness-*-<os>-<arch>.tar.gz`，见 §13） |
 | `releaseManifestUrl` | 空（自动推导） | 显式清单 URL 覆盖 |
 
 - 通道分支：`checkForUpdates` / `produceCandidate`（原 `buildUpdate` 改为通用命名）按 `updateSource` 分派——`release` → §5+§6；`source` → 现有 `git fetch + git archive + pnpm build` 全链路。
@@ -247,7 +248,7 @@ export interface UpgradeSettings {
 | `src/preload.ts` | "关于"面板展示下载进度（复用既有状态展示）；就绪提示条沿用，无结构改动 |
 | `scripts/publish-release.sh`（新增） | 发布脚本：打包 → 冒烟 → 清单生成 → gh release 上传（资产先、清单后）；本地手动与云端流水线共用 |
 | `.github/workflows/auto-release.yml`（新增） | 自动发布流水线：cron 轮询上游最新 tag → 幂等判断 → 检出/构建/打包 → 创建 Release 上传产物与清单（§3.2） |
-| `scripts/bundle-harness.sh` | 复用；产物 zip 打包路径可复用其产出（另加 `version.json` 写入步骤） |
+| `scripts/bundle-harness.sh` | 复用；产物 tar.gz 打包路径可复用其产出（另加 `version.json` 写入步骤） |
 | `electron-builder.yml` | 本期无强制改动（可选加 `publish` 配置留后续）；多架构/跨平台矩阵演进见 §13（mac `arch: [x64, arm64]`、win/linux target 后续） |
 | harness 前端 / 后端 | **零改动** |
 
@@ -262,7 +263,7 @@ export interface UpgradeSettings {
 | GitHub 2GB 单文件上限 | 产物无法上传 | 控制 bundle 体积（prod-only 裁剪 node_modules 留后续）；多资产拆分 + 清单聚合 |
 | 全量下载体积 | 升级下载耗时 | 后台下载 + 关于面板进度；断点续传（.part 保留续传留后续）；差分更新后续版本 |
 | 清单与资产不一致窗口 | 设备拉到错误 URL/哈希 | 发布脚本顺序保证（先资产后清单）；sha256 + size 双重校验；校验失败即清理重试 |
-| zip 解压路径穿越（恶意产物） | 安全 | 解压前校验清单 sha256（信任链=发布者签名，自用场景可接受）；解压目标限定在候选区并校验入口文件 |
+| tar.gz 解压路径穿越（恶意产物） | 安全 | 解压前校验清单 sha256（信任链=发布者签名，自用场景可接受）；解压目标限定在候选区并校验入口文件 |
 | 产物通道运行区无 .git | 开发者无法在运行区直接改源码 | 属预期（产物通道面向使用）；开发者可切 `source` 通道或手动 clone 到运行区（文档说明） |
 | 私仓鉴权 | 设备无法匿名下载 | 默认公开 repo；私有场景通过 `releaseManifestUrl` 指向可访问镜像（P2） |
 | 旧壳读新状态文件 | 未知状态处理不当 | `loadUpdateState` 未知 state 回退 idle（现状容错已覆盖，补测试） |
@@ -285,7 +286,7 @@ export interface UpgradeSettings {
    - **多平台匹配（§13 协议预留）**：伪造含 darwin-x64/darwin-arm64/win32-x64/linux-x64 多资产的清单，验证各平台/架构选中正确条目、无匹配分支、`schemaVersion` 未知字段兼容
 2. **集成（本地 HTTP 假发布源或私有测试 repo）**：
    - 检测 → 下载 → 校验 → 解压 → ready → 就绪事件
-   - 断网 / 哈希错 / 损坏 zip → 清理重试，旧版可用
+   - 断网 / 哈希错 / 损坏 tar.gz → 清理重试，旧版可用
    - 替换 → 重启 → 新版本生效（version.json 变化）；替换失败回滚
    - 多资产清单下本机条目匹配与下载
 3. **发布侧演练**：`publish-release.sh --dry-run` 产物 + 清单生成；真实打 tag 上传一次验证设备端拉取。
@@ -329,7 +330,7 @@ export interface UpgradeSettings {
 ### 13.2 协议预留（本期落地）
 
 - **latest.json 协议**（§4）：`schemaVersion` 固定、`assets[]` 按 `os+arch` 多条目；设备端按 `process.platform + process.arch` 精确匹配，无匹配 → 提示"暂不支持本平台/架构"而非报错。**新增字段只增不减，旧壳忽略未知字段**。
-- **产物命名规范**：`DeepSeek-Harness-<version>-<os>-<arch>.zip`（os 取 Node 命名：darwin/win32/linux；arch：x64/arm64），全局唯一，同一 Release 内可并存多资产。
+- **产物命名规范**：`DeepSeek-Harness-<version>-<os>-<arch>.tar.gz`（os 取 Node 命名：darwin/win32/linux；arch：x64/arm64），全局唯一，同一 Release 内可并存多资产。
 - **os 命名映射**：`process.platform` → 清单 `os` 字段：`darwin`/`win32`/`linux`；`process.arch` → `x64`/`arm64`/`arm`。发布脚本与设备端共用同一映射表，避免歧义。
 - **本地版本判定**（§5）与下载/校验/解压（§6）逻辑与平台无关，直接复用。
 
@@ -353,7 +354,7 @@ GitHub Actions：strategy.matrix { os: [macos-13, macos-14, windows-latest, ubun
 | 项 | 预留点 |
 |---|---|
 | 平台/架构判定 | `currentPlatform()` 统一封装 `process.platform/arch` → 清单匹配；单测覆盖映射表 |
-| 路径与命令 | 沿用壳层既有跨平台分支（Windows 代码分支已备）；下载/解压用 Node 内置 API 而非 shell 专有命令（tar/curl 差异，darwin 有 bsdtar、linux 有 gnutar，zip 解析统一用 Node 库） |
+| 路径与命令 | 沿用壳层既有跨平台分支（Windows 代码分支已备）；下载/解压用 Node 内置 API 而非 shell 专有命令（tar/curl 差异，darwin 有 bsdtar、linux 有 gnutar，tar.gz 统一用系统 tar（darwin/win32 bsdtar、linux gnu tar，均原生支持，无 unzip 依赖）） |
 | 权限与安全 | macOS Gatekeeper（未签名右键打开）、Windows SmartScreen、Linux sandbox 依赖；分发扩大后另立签名/公证专项 |
 | 后端启动 | 沿用既有 `DSH_*` 环境与 spawn 逻辑（Windows 下需 `cmd`/shell 差异处理，已备） |
 
@@ -371,3 +372,4 @@ GitHub Actions：strategy.matrix { os: [macos-13, macos-14, windows-latest, ubun
 | v0.2.0 | 2026-08-20 | 首次成稿：产物下载式升级技术方案（草案，待评审）；既有源码构建式管线完整保留 |
 | v0.2.0 | 2026-08-20 | 增补 §3.2 自动发布流水线（GitHub Actions 上游同步 + 自动打包上传），并同步改动清单/风险/测试/实施顺序 |
 | v0.2.0 | 2026-08-20 | 新增 §13 多架构与跨平台支持（预留设计）：清单协议（schemaVersion/os）、产物命名规范、构建矩阵、设备端匹配逻辑；协议层本期落地，多平台构建后续实施 |
+| v0.2.0 | 2026-08-20 | 实施修订：产物格式由 zip 改为 **tar.gz**（node_modules 海量小文件下打包快一个数量级，且 darwin/win32/linux 系统 tar 原生解压、设备端零 unzip 依赖）；§3.1 发布步骤与 publish-release.sh 对齐；协议/命名/风险/测试同步更新 |

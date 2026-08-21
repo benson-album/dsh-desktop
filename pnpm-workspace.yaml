@@ -1,10 +1,10 @@
 packages:
   - .
 
-# pnpm 11 默认阻止依赖的构建脚本（postinstall）。以下依赖的构建脚本是
-# 打包必需的，需显式放行：
-#   - electron       postinstall 下载当前平台 Electron 运行时（CI 打包必需）
+# pnpm 11 用 allowBuilds 允许依赖的构建脚本（postinstall），默认 strictDepBuilds=true
+# 导致未放行的构建脚本硬失败。以下依赖的脚本是打包必需的：
+#   - electron           postinstall 下载当前平台 Electron 运行时（CI 打包必需）
 #   - electron-winstaller  Windows nsis 打包工具链（build-shell CI 必需）
-onlyBuiltDependencies:
-  - electron
-  - electron-winstaller
+allowBuilds:
+  electron: true
+  electron-winstaller: true

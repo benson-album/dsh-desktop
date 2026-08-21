@@ -8,6 +8,7 @@
 |---|---|
 | [PRD-DSH-desktop-shell-v0.1.0.md](./prd/PRD-DSH-desktop-shell-v0.1.0.md) | 产品需求：背景/目标/用户场景/FR-D1~D7/NFR/架构/验收/风险/路线图/变更记录 |
 | [PRD-DSH-release-download-upgrade-v0.2.0.md](./prd/PRD-DSH-release-download-upgrade-v0.2.0.md) | 产品需求（✅ 已确认 2026-08-20）：产物下载式自动升级——发布者打包上传 GitHub Releases，app 下载产物升级；源码构建式保留为可选通道 |
+| [PRD-DSH-shell-release-v0.3.0.md](./prd/PRD-DSH-shell-release-v0.3.0.md) | 产品需求（⏳ 草案）：壳包发布专项——壳与内容包分离发布，mac 本地双架构 + win/linux CI 打包 |
 
 ## 技术文档（Technical）
 
@@ -15,6 +16,7 @@
 |---|---|
 | [dsh-desktop-shell-v0.1.0.md](./technical/dsh-desktop-shell-v0.1.0.md) | 技术方案：进程拓扑/目录/壳集成/沉浸式/图标/升级管线/菜单本地化/调试/测试/风险 |
 | [dsh-release-download-upgrade-v0.2.0.md](./technical/dsh-release-download-upgrade-v0.2.0.md) | 技术方案（✅ 已确认 2026-08-20）：产物下载式升级——发布脚本/更新清单/检测下载校验解压/替换回滚复用/通道抽象/自动发布流水线/多架构跨平台预留 |
+| [dsh-shell-release-v0.3.0.md](./technical/dsh-shell-release-v0.3.0.md) | 技术方案（⏳ 草案）：壳包发布——publish-shell.sh/electron-builder win+linux/build-shell CI/安装指引 |
 | [development-guide-v0.1.0.md](./technical/development-guide-v0.1.0.md) | **开发指南**：环境要求/构建打包命令/测试方法/架构速览/**13 条已知坑位与修复记录**/10 条设计约束/后续优化/发布流程 |
 
 ## 阅读顺序（第三方开发者）

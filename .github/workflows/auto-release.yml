@@ -37,10 +37,11 @@ jobs:
 
       - name: Resolve latest upstream tag
         id: upstream
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="$(gh api repos/deepseek-ai/deepseek-harness/releases/latest --jq .tag_name)"
+          # /releases/latest 只返回 stable（非 prerelease），上游 rc 版是 prerelease → 404。
+          # 改从远程 tag 列表取最高 dsh-v*（git 版本排序，含 rc）。
+          TAG="$(git ls-remote --tags https://github.com/deepseek-ai/deepseek-harness.git 'dsh-v*' \
+            | sed 's|.*refs/tags/||; s|\^{}$||' | sort -Vu | tail -1)"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#dsh-v}" >> "$GITHUB_OUTPUT"
 

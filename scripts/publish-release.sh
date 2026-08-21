@@ -70,7 +70,9 @@ fs.writeFileSync(process.argv[1] + '/version.json',
 
 # 3. 打包内容 tar.gz（顶层为内容本身，与内置 bundle 语义一致；-z 保留符号链接）
 ROOT="$(pwd)"
-(cd "$STAGE" && tar -czf "${ROOT}/${ASSET}" .)
+# gzip -1 最快压缩：Windows runner 上默认压缩级别压缩海量小文件极慢（实测 1h+ 卡死）
+GZIP_LEVEL="${DSH_RELEASE_GZIP_LEVEL:--1}"
+(cd "$STAGE" && tar -I "gzip -${GZIP_LEVEL}" -cf "${ROOT}/${ASSET}" .)
 rm -rf "$STAGE"
 # Windows (git bash) 有 sha256sum 无 shasum；macOS/Linux 反之——双保险
 SHA="$( (shasum -a 256 "${ROOT}/${ASSET}" || sha256sum "${ROOT}/${ASSET}") | cut -d' ' -f1)"

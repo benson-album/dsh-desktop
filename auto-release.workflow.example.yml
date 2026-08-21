@@ -23,7 +23,9 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-latest          # x64 本期；矩阵扩展见技术文档 §13.3
+    runs-on: macos-13             # Intel x64：产物必须与本地打包/当前设备架构一致
+                                  # （macos-latest 是 Apple Silicon，会产出 arm64 资产，
+                                  #   x64 设备将匹配不到——见技术文档 §13；矩阵扩展后续）
     steps:
       - name: Checkout shell repo
         uses: actions/checkout@v4

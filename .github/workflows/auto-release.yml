@@ -1,0 +1,82 @@
+name: auto-release
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: '强制重新构建并覆盖已发布的 tag'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout shell repo
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+      - name: Resolve latest upstream tag
+        id: upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="$(gh api repos/deepseek-ai/deepseek-harness/releases/latest --jq .tag_name)"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#dsh-v}" >> "$GITHUB_OUTPUT"
+      - name: Idempotency check (skip when already released)
+        id: idem
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.upstream.outputs.tag }}"
+          FORCE="${{ github.event.inputs.force }}"
+          EXISTING="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .tag_name 2>/dev/null || true)"
+          if [[ "${EXISTING}" == "${TAG}" && "${FORCE}" != "true" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Clone upstream source
+        if: steps.idem.outputs.skip != 'true'
+        run: |
+          git clone --depth 1 --branch "${{ steps.upstream.outputs.tag }}" \
+            https://github.com/deepseek-ai/deepseek-harness.git harness-src
+      - name: Build harness (upstream)
+        if: steps.idem.outputs.skip != 'true'
+        working-directory: harness-src
+        env:
+          DSH_CLIENT_COMMIT_HASH: ${{ steps.upstream.outputs.tag }}
+        run: |
+          pnpm install --frozen-lockfile || pnpm install
+          pnpm build
+      - name: Package artifact + manifest (dry-run)
+        if: steps.idem.outputs.skip != 'true'
+        env:
+          DSH_RELEASE_REF: harness-src
+        run: |
+          bash scripts/publish-release.sh "${{ steps.upstream.outputs.version }}" \
+            --repo "${{ github.repository }}" --dry-run
+      - name: Publish GitHub Release (asset first, manifest last)
+        if: steps.idem.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.upstream.outputs.tag }}"
+          gh release create "${TAG}" build/release-artifacts/*.tar.gz \
+            --repo "${{ github.repository }}" \
+            --title "${TAG}" \
+            --notes "dsh-desktop 自动发布（上游 ${TAG}）" \
+            || gh release upload "${TAG}" build/release-artifacts/*.tar.gz \
+               --repo "${{ github.repository }}" --clobber
+          gh release upload "${TAG}" build/release-artifacts/latest.json \
+            --repo "${{ github.repository }}" --clobber

@@ -7,8 +7,8 @@
 # 平台矩阵（§13.3）：每个 runner 在自身平台上构建（原生依赖随平台），
 # 各自上传资产 + 分平台清单片段；finalize job 合并为 latest.json。
 #   - macos-13（Intel）→ darwin-x64
+#   - macos-14（Apple Silicon）→ darwin-arm64
 #   - windows-latest（x64）→ win32-x64
-#   （macos-latest 是 Apple Silicon，产物为 arm64；需要时加一行矩阵即可）
 #
 # 设备端升级逻辑不变：只检测本仓库 Release 的 latest.json，按 os+arch 匹配。
 name: auto-release
@@ -32,9 +32,12 @@ jobs:
       fail-fast: false             # 某一平台失败不阻塞其他平台
       matrix:
         include:
-          - os: macos-13           # Intel x64（macos-latest 是 arm64）
+          - os: macos-13           # Intel x64
             target_os: darwin
             arch: x64
+          - os: macos-14           # Apple Silicon（arm64）
+            target_os: darwin
+            arch: arm64
           - os: windows-latest     # x64
             target_os: win32
             arch: x64

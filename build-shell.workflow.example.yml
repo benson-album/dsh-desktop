@@ -1,0 +1,93 @@
+# dsh-desktop 壳包发布（Windows/Linux）— CI 在对应 runner 上构建壳。
+# macOS 壳由发布者本地 publish-shell.sh 产出（macOS 主机无法可靠交叉打包）。
+#
+# 触发：workflow_dispatch（手动，输入 version）
+# 产出：dsh-desktop-shell-win32-x64-<version>.zip / …-linux-x64-<version>.AppImage
+#       上传到 dsh-desktop-v<version> Release（壳 tag，与内容 tag dsh-v* 隔离）
+#
+# 注意：electron-builder 在 CI 需要可写缓存（electron_config_cache / ELECTRON_BUILDER_CACHE）。
+name: build-shell
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '壳版本（如 0.3.0，tag = dsh-desktop-v0.3.0）'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  shell:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: win
+            asset_prefix: dsh-desktop-shell-win32-x64
+            ext: zip
+          - os: ubuntu-latest
+            target: linux
+            asset_prefix: dsh-desktop-shell-linux-x64
+            ext: AppImage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install deps
+        run: |
+          pnpm install --frozen-lockfile || pnpm install
+        shell: bash
+
+      - name: Build shell (tsc)
+        run: pnpm build
+        shell: bash
+
+      - name: Package shell (${{ matrix.target }})
+        env:
+          electron_config_cache: "${{ runner.temp }}/electron-cache"
+          ELECTRON_BUILDER_CACHE: "${{ runner.temp }}/builder-cache"
+        run: |
+          ./node_modules/.bin/electron-builder --${{ matrix.target }} --x64
+        shell: bash
+
+      - name: Rename artifact
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          case "${{ matrix.target }}" in
+            win)
+              SRC="$(ls release/*.exe | head -1)"
+              ;;
+            linux)
+              SRC="$(ls release/*.AppImage | head -1)"
+              ;;
+          esac
+          ASSET="${{ matrix.asset_prefix }}-${VERSION}.${{ matrix.ext }}"
+          cp "${SRC}" "${ASSET}"
+          echo "asset=${ASSET}" >> "$GITHUB_OUTPUT"
+        id: rename
+        shell: bash
+
+      - name: Upload to shell release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          TAG="dsh-desktop-v${VERSION}"
+          gh release create "${TAG}" "${{ steps.rename.outputs.asset }}" \
+            --repo "${{ github.repository }}" \
+            --title "${TAG}" \
+            --notes "dsh-desktop 壳包（${{ matrix.target }}）。" \
+            || gh release upload "${TAG}" "${{ steps.rename.outputs.asset }}" \
+               --repo "${{ github.repository }}" --clobber
+          echo "已上传 ${TAG}: ${{ steps.rename.outputs.asset }}"
+        shell: bash

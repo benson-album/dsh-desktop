@@ -9,6 +9,7 @@
 #   - macos-13（Intel）→ darwin-x64
 #   - macos-14（Apple Silicon）→ darwin-arm64
 #   - windows-latest（x64）→ win32-x64
+#   - ubuntu-latest（x64）→ linux-x64
 #
 # 设备端升级逻辑不变：只检测本仓库 Release 的 latest.json，按 os+arch 匹配。
 name: auto-release
@@ -40,6 +41,9 @@ jobs:
             arch: arm64
           - os: windows-latest     # x64
             target_os: win32
+            arch: x64
+          - os: ubuntu-latest      # x64
+            target_os: linux
             arch: x64
     runs-on: ${{ matrix.os }}
     steps:

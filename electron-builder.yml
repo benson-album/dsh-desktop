@@ -31,8 +31,27 @@ mac:
   gatekeeperAssess: false
   target:
     - target: dir
-      arch: [x64]
+      arch: [x64, arm64]
     - target: zip
+      arch: [x64, arm64]
+
+# Windows shell (built by CI on a windows runner — a macOS host cannot
+# cross-build reliably). nsis installer, x64.
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+# Linux shell (built by CI on an ubuntu runner). AppImage, x64.
+linux:
+  icon: build/icon.png
+  category: Development
+  target:
+    - target: AppImage
       arch: [x64]
 
 npmRebuild: false

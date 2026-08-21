@@ -2,9 +2,9 @@
 
 | 项目名称 | dsh-desktop · DeepSeek Harness 桌面应用 |
 |----------|-----------------------------------------|
-| 文档版本 | v0.3.0（⏳ 草案，待评审确认） |
+| 文档版本 | v0.3.0（✅ 已确认） |
 | 编写日期 | 2026-08-21 |
-| 文档状态 | ⏳ 草案（未实施；评审确认后实施） |
+| 文档状态 | ✅ 已确认（2026-08-21），进入实施 |
 | 关联文档 | 技术方案 [dsh-shell-release-v0.3.0](../technical/dsh-shell-release-v0.3.0.md)（🔄 同版本）；内容升级体系 [PRD-DSH-release-download-upgrade-v0.2.0](./PRD-DSH-release-download-upgrade-v0.2.0.md)（已实施，本专项**不改变**其内容包逻辑） |
 | 目标编号 | **DSH-Desktop-SR**（壳包发布专项） |
 

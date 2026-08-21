@@ -1,8 +1,8 @@
 # 开发设计文档 — 壳包发布专项（Shell Release）
 
-- 文档版本：v0.3.0（⏳ 草案，待评审确认）
+- 文档版本：v0.3.0（✅ 已确认）
 - 日期：2026-08-21
-- 状态：**草案**（未实施；评审确认后按 §10 顺序实施）
+- 状态：**已确认**（2026-08-21），按 §10 顺序实施
 - 关联：[PRD-DSH-shell-release-v0.3.0.md](../prd/PRD-DSH-shell-release-v0.3.0.md)（🔄 同版本）
 - 既有基线：内容升级体系 [dsh-release-download-upgrade-v0.2.0.md](./dsh-release-download-upgrade-v0.2.0.md)（已实施，本专项**不改变**其内容包逻辑）
 - 技术基线：Electron 43.4.0 / electron-builder 26.15.3 / GitHub Releases

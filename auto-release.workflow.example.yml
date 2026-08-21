@@ -2,7 +2,7 @@
 #
 # 定时轮询上游 deepseek-ai/deepseek-harness 的最新 release tag；若有新版本
 # （且本仓库尚未发布过该 tag 的产物），则自动：检出上游源码 → 构建 →
-# 打包内容 zip + latest.json → 创建本仓库 Release 并上传（资产先、清单后）。
+# 打包内容 tar.gz + latest.json → 创建本仓库 Release 并上传（资产先、清单后）。
 #
 # 设备端升级逻辑不变：只检测本仓库 Release 的 latest.json。
 # 多架构/跨平台扩展点见技术文档 §13（matrix 扩展此处预留）。
@@ -90,12 +90,12 @@ jobs:
         run: |
           TAG="${{ steps.upstream.outputs.tag }}"
           VERSION="${{ steps.upstream.outputs.version }}"
-          # 资产先：创建 Release 并上传 zip
-          gh release create "${TAG}" build/release-artifacts/*.zip \
+          # 资产先：创建 Release 并上传 tar.gz
+          gh release create "${TAG}" build/release-artifacts/*.tar.gz \
             --repo "${{ github.repository }}" \
             --title "${TAG}" \
             --notes "dsh-desktop 自动发布（harness ${VERSION}，上游 ${TAG}）" \
-            || gh release upload "${TAG}" build/release-artifacts/*.zip \
+            || gh release upload "${TAG}" build/release-artifacts/*.tar.gz \
                --repo "${{ github.repository }}" --clobber
           # 清单后：latest.json 就绪才代表该版本可被设备发现
           gh release upload "${TAG}" build/release-artifacts/latest.json \

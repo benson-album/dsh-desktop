@@ -1,11 +1,17 @@
-# dsh-desktop 自动发布流水线（技术文档 §3.2）
+# dsh-desktop 自动发布流水线（技术文档 §3.2 / §13）
 #
 # 定时轮询上游 deepseek-ai/deepseek-harness 的最新 release tag；若有新版本
 # （且本仓库尚未发布过该 tag 的产物），则自动：检出上游源码 → 构建 →
-# 打包内容 tar.gz + latest.json → 创建本仓库 Release 并上传（资产先、清单后）。
+# 打包内容 tar.gz → 上传到本仓库 Release（资产先、清单后）。
 #
-# 设备端升级逻辑不变：只检测本仓库 Release 的 latest.json。
-# 多架构/跨平台扩展点见技术文档 §13（matrix 扩展此处预留）。
+# 平台矩阵（§13.3）：每个 runner 在自身平台上构建（原生依赖随平台），
+# 各自上传资产 + 分平台清单片段；finalize job 合并为 latest.json。
+#   - macos-13（Intel）→ darwin-x64
+#   - macos-14（Apple Silicon）→ darwin-arm64
+#   - windows-latest（x64）→ win32-x64
+#   - ubuntu-latest（x64）→ linux-x64
+#
+# 设备端升级逻辑不变：只检测本仓库 Release 的 latest.json，按 os+arch 匹配。
 name: auto-release
 
 on:
@@ -23,7 +29,23 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-latest          # x64 本期；矩阵扩展见技术文档 §13.3
+    strategy:
+      fail-fast: false             # 某一平台失败不阻塞其他平台
+      matrix:
+        include:
+          - os: macos-13           # Intel x64
+            target_os: darwin
+            arch: x64
+          - os: macos-14           # Apple Silicon（arm64）
+            target_os: darwin
+            arch: arm64
+          - os: windows-latest     # x64
+            target_os: win32
+            arch: x64
+          - os: ubuntu-latest      # x64
+            target_os: linux
+            arch: x64
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout shell repo
         uses: actions/checkout@v4
@@ -34,6 +56,7 @@ jobs:
           node-version: 22
       - name: Enable corepack (pnpm)
         run: corepack enable
+        shell: bash
 
       - name: Resolve latest upstream tag
         id: upstream
@@ -44,6 +67,7 @@ jobs:
             | sed 's|.*refs/tags/||; s|\^{}$||' | sort -Vu | tail -1)"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#dsh-v}" >> "$GITHUB_OUTPUT"
+        shell: bash
 
       - name: Idempotency check (skip when already released)
         id: idem
@@ -59,12 +83,14 @@ jobs:
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
+        shell: bash
 
       - name: Clone upstream source
         if: steps.idem.outputs.skip != 'true'
         run: |
           git clone --depth 1 --branch "${{ steps.upstream.outputs.tag }}" \
             https://github.com/deepseek-ai/deepseek-harness.git harness-src
+        shell: bash
 
       - name: Resolve upstream commit
         id: commit
@@ -72,6 +98,7 @@ jobs:
         working-directory: harness-src
         run: |
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        shell: bash
 
       - name: Build harness (upstream)
         if: steps.idem.outputs.skip != 'true'
@@ -83,30 +110,87 @@ jobs:
         run: |
           pnpm install --frozen-lockfile || pnpm install
           pnpm build
+        shell: bash
 
-      - name: Package artifact + manifest (dry-run)
+      - name: Package artifact + per-platform manifest (dry-run)
         if: steps.idem.outputs.skip != 'true'
         env:
           DSH_RELEASE_REF: harness-src
         run: |
           bash scripts/publish-release.sh "${{ steps.upstream.outputs.version }}" \
             --repo "${{ github.repository }}" --dry-run
+        shell: bash
 
-      - name: Publish GitHub Release (asset first, manifest last)
+      - name: Upload artifact + platform manifest fragment
         if: steps.idem.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.upstream.outputs.tag }}"
-          VERSION="${{ steps.upstream.outputs.version }}"
+          FRAG="latest-${{ matrix.target_os }}-${{ matrix.arch }}.json"
           # 资产先：创建 Release 并上传 tar.gz
           gh release create "${TAG}" build/release-artifacts/*.tar.gz \
             --repo "${{ github.repository }}" \
             --title "${TAG}" \
-            --notes "dsh-desktop 自动发布（harness ${VERSION}，上游 ${TAG}）" \
+            --notes "dsh-desktop 自动发布（上游 ${TAG}）" \
             || gh release upload "${TAG}" build/release-artifacts/*.tar.gz \
                --repo "${{ github.repository }}" --clobber
-          # 清单后：latest.json 就绪才代表该版本可被设备发现
-          gh release upload "${TAG}" build/release-artifacts/latest.json \
+          # 分平台清单片段（finalize 合并），上传
+          cp build/release-artifacts/latest.json "build/release-artifacts/${FRAG}"
+          gh release upload "${TAG}" "build/release-artifacts/${FRAG}" \
             --repo "${{ github.repository }}" --clobber
-          echo "已发布 ${TAG}: https://github.com/${{ github.repository }}/releases/tag/${TAG}"
+          echo "已上传 ${TAG} 资产（${{ matrix.target_os }}-${{ matrix.arch }}）"
+        shell: bash
+
+  finalize:
+    needs: release
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect platform manifest fragments
+        id: collect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name 2>/dev/null || true)"
+          if [[ -z "${TAG}" ]]; then echo "无 Release，跳过 finalize"; exit 0; fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          mkdir -p frags
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq '.assets[].name' \
+            | grep '^latest-' | while read -r n; do
+              curl -sL "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${n}" -o "frags/${n}"
+            done
+          ls frags/ 2>/dev/null || true
+        shell: bash
+
+      - name: Merge fragments into latest.json
+        run: |
+          ls frags/ >/dev/null 2>&1 || { echo "无片段，跳过"; exit 0; }
+          python3 - <<'PY'
+          import json, glob
+          frags = sorted(glob.glob('frags/latest-*.json'))
+          if not frags:
+              raise SystemExit(0)
+          merged = None
+          for f in frags:
+              m = json.load(open(f))
+              if merged is None:
+                  merged = m
+              else:
+                  merged['assets'].extend(m['assets'])
+          merged['assets'] = sorted(merged['assets'], key=lambda a: (a['os'], a['arch']))
+          json.dump(merged, open('latest.json', 'w'), indent=2, ensure_ascii=False)
+          print('merged', len(merged['assets']), 'assets:', [a['name'] for a in merged['assets']])
+          PY
+        shell: bash
+
+      - name: Upload merged latest.json (manifest last)
+        if: steps.collect.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          test -f latest.json
+          gh release upload "${{ steps.collect.outputs.tag }}" latest.json \
+            --repo "${{ github.repository }}" --clobber
+          echo "latest.json 已更新（含全部平台资产）"
+        shell: bash

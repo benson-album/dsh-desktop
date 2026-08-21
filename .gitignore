@@ -10,5 +10,6 @@ release/
 .pnpm-store/
 build/harness-bundle.tar.gz
 build/release-artifacts/
+build/shell-artifacts/
 *.log
 .DS_Store

@@ -72,7 +72,8 @@ fs.writeFileSync(process.argv[1] + '/version.json',
 ROOT="$(pwd)"
 (cd "$STAGE" && tar -czf "${ROOT}/${ASSET}" .)
 rm -rf "$STAGE"
-SHA="$(shasum -a 256 "${ROOT}/${ASSET}" | cut -d' ' -f1)"
+# Windows (git bash) 有 sha256sum 无 shasum；macOS/Linux 反之——双保险
+SHA="$( (shasum -a 256 "${ROOT}/${ASSET}" || sha256sum "${ROOT}/${ASSET}") | cut -d' ' -f1)"
 SIZE="$(stat -f%z "${ROOT}/${ASSET}" 2>/dev/null || stat -c%s "${ROOT}/${ASSET}")"
 mv "${ROOT}/${ASSET}" "$OUT_DIR/"
 echo "== 产物: $OUT_DIR/$ASSET ($(du -h "$OUT_DIR/$ASSET" | cut -f1), sha256=$SHA)"

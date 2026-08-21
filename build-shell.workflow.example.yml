@@ -43,6 +43,10 @@ jobs:
         with:
           node-version: 22
 
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+        shell: bash
+
       - name: Install deps
         run: |
           pnpm install --frozen-lockfile || pnpm install

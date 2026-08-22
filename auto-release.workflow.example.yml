@@ -126,20 +126,28 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           TAG="${{ steps.upstream.outputs.tag }}"
+          VERSION="${{ steps.upstream.outputs.version }}"
+          # 显式资产路径（避免 glob 在 Windows git bash 的展开差异）
+          ASSET="build/release-artifacts/DeepSeek-Harness-${VERSION}-${{ matrix.target_os }}-${{ matrix.arch }}.tar.gz"
           FRAG="latest-${{ matrix.target_os }}-${{ matrix.arch }}.json"
-          # 资产先：创建 Release 并上传 tar.gz
-          gh release create "${TAG}" build/release-artifacts/*.tar.gz \
+          echo "== 上传资产: ${ASSET}"
+          ls -la build/release-artifacts/
+          test -f "${ASSET}" || { echo "资产缺失: ${ASSET}"; exit 1; }
+          # 资产先：创建 Release（已存在则忽略）→ 上传 tar.gz
+          gh release create "${TAG}" "${ASSET}" \
             --repo "${{ github.repository }}" \
             --title "${TAG}" \
             --notes "dsh-desktop 自动发布（上游 ${TAG}）" \
-            || gh release upload "${TAG}" build/release-artifacts/*.tar.gz \
-               --repo "${{ github.repository }}" --clobber
+            || true
+          gh release upload "${TAG}" "${ASSET}" \
+            --repo "${{ github.repository }}" --clobber
           # 分平台清单片段（finalize 合并），上传
           cp build/release-artifacts/latest.json "build/release-artifacts/${FRAG}"
           gh release upload "${TAG}" "build/release-artifacts/${FRAG}" \
             --repo "${{ github.repository }}" --clobber
-          echo "已上传 ${TAG} 资产（${{ matrix.target_os }}-${{ matrix.arch }}）"
+          echo "已上传 ${TAG}（${{ matrix.target_os }}-${{ matrix.arch }}）"
         shell: bash
 
   finalize:

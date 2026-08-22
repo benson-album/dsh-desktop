@@ -53,6 +53,30 @@
 
 ---
 
+### 壳发布流程图（发布者视角）
+
+```
+发布者决定发版（P0 立即 / 常规累积：每日≤1版 或 ≥20 条变更）
+        │
+        ▼
+  bash scripts/publish-shell.sh <version>
+        │
+        ├── 本地：electron-builder 打 mac x64 + arm64 壳 zip
+        │        └─► 上传 dsh-desktop-mac-<arch>-<version>.zip
+        │
+        └── 打 tag：dsh-desktop-v<version>（推送触发）
+                 └──► build-shell 云打包（自动）
+                       ├─ windows-latest → dsh-desktop-win-x64-<ver>.zip
+                       └─ ubuntu-latest  → dsh-desktop-linux-x64-<ver>.AppImage
+                       └─► 上传到同一 dsh-desktop-v<version> Release
+
+用户视角：
+  应用内 ⌘U「检查更新」──► 对比 GitHub 最新 dsh-desktop-v* tag 与本地版本
+        │ 有新版
+        ▼
+   弹窗「发现新应用版本」──► [打开下载页] → 下载 zip → 解压 → 替换 Applications
+```
+
 ## 3. 功能需求（FR）
 
 > 优先级：P0=核心可用；P1=重要增强。

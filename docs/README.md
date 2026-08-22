@@ -2,6 +2,46 @@
 
 > 文档体系面向**维护者与第三方开发者（含 AI 软件）**：需求 → 技术方案 → 开发指南 → 验证。
 
+## 升级方案速览（两套可切换）
+
+| | **产物下载式**（默认，`release`） | **源码构建式**（`source`） |
+|---|---|---|
+| 升级方式 | 下载 tar.gz（多镜像择优）→ 校验 → 解压 | git fetch + 后台 pnpm 构建 |
+| 优点 | 快、无需构建环境、失败面小 | 可追 master、运行区可直接改源码 |
+| 设备端依赖 | 仅网络 | git / node ≥22 / pnpm ≥11 |
+| 切换方式 | 设置页（⌘,）→ 更新与升级 → 更新源 | 同左 |
+
+> 两套方案**内容版本天然对齐**（都跟随上游 `deepseek-harness` 的 `dsh-v*` tag）；壳版本独立（`dsh-desktop-v*`）。
+
+## 整体流程图（内容自动升级闭环）
+
+```
+上游 deepseek-harness 发新版（dsh-v* tag）
+        │ ① auto-release 每 6h 检测（cron，云端）
+        ▼
+   云端构建打包（darwin-x64/arm64 + win32-x64 + linux-x64）
+        │ ② 发布到 benson-album/dsh-desktop Releases
+        │   （内容 tar.gz + 平台清单片段 → finalize 合并 latest.json → 同步仓库 main）
+        ▼
+   设备端检测（③ jsDelivr 拉 latest.json → 按本机 os+arch 匹配）
+        │
+        ├── 无新版 ────────► 静默（不打扰）
+        └── 有新版 ──► 后台下载 tar.gz（④ 镜像择优、失败自动切换）
+                          │ sha256 校验 → 解压到候选区
+                          ▼
+                    提示"新版本已就绪"（⑤ 右下角浮条）
+                          │ 点「立即更新」
+                          ▼
+                    原子替换 → 重启生效（⑥ 失败自动回滚）
+```
+
+```
+配套：壳发布（手动，节流）━━► 本地 publish-shell.sh 打 mac 壳 + 打 dsh-desktop-v* tag
+                                └► build-shell 自动云打包 win/linux ─► 设备端 ⌘U 检测到新壳 → 下载页
+```
+
+各产品文档含**功能级流程图**：PRD v0.2.0（检测/下载/替换流程）、PRD v0.3.0（壳发布流程）。
+
 ## 产品文档（PRD）
 
 | 文档 | 说明 |

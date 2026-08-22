@@ -154,10 +154,13 @@ export function matchAsset(manifest: ReleaseManifest, os: string, arch: string):
  * (`latest.json` at the repo root) so it does NOT depend on
  * `releases/latest` — a newer shell release (dsh-desktop-v*) would shadow the
  * content release and make `releases/latest/download/latest.json` 404.
+ * Served via jsDelivr CDN: `raw.githubusercontent.com` is unreachable in many
+ * networks (esp. CN), while jsDelivr has good global/CN reachability.
+ * `releaseManifestUrl` in settings.json overrides this default.
  */
 export function releaseManifestUrl(settings: UpgradeSettings): string {
   if (settings.releaseManifestUrl !== undefined && settings.releaseManifestUrl !== '') return settings.releaseManifestUrl
-  return `https://raw.githubusercontent.com/${settings.releaseRepo}/main/latest.json`
+  return `https://cdn.jsdelivr.net/gh/${settings.releaseRepo}@main/latest.json`
 }
 
 /* ─────────────────────────── update state machine ─────────────────────────── */

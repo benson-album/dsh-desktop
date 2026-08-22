@@ -67,7 +67,9 @@ jobs:
           electron_config_cache: "${{ runner.temp }}/electron-cache"
           ELECTRON_BUILDER_CACHE: "${{ runner.temp }}/builder-cache"
         run: |
-          ./node_modules/.bin/electron-builder --${{ matrix.target }} --x64
+          # --publish never：CI 检测会触发 electron-builder 隐式发布（需 GH_TOKEN），
+          # 我们自行用 gh release 上传（见下一步）
+          ./node_modules/.bin/electron-builder --${{ matrix.target }} --x64 --publish never
         shell: bash
 
       - name: Rename artifact

@@ -170,7 +170,7 @@ latest.json → 创建本仓库 Release（资产先、清单后）。手动触�
 
 **壳包发布（v0.3.0，与内容包隔离）**：
 
-- 壳 tag：`dsh-desktop-v<version>`；资产前缀：`dsh-desktop-shell-*`；**不进 latest.json**（不影响内容升级）
+- 壳 tag：`dsh-desktop-v<version>`；资产名：`dsh-desktop-<os>-<arch>-<version>.<ext>`（os 用 mac/win/linux，用户视角）；**不进 latest.json**（不影响内容升级）
 - macOS（本地，双架构）：`bash scripts/publish-shell.sh 0.3.0 --dry-run` 验证 → 真实发布
 - Windows / Linux（CI）：GitHub Actions 页手动运行 `build-shell` workflow，输入 version → 自动打 win32-x64 zip 与 linux-x64 AppImage 并上传同一壳 tag
 - 安装：mac 解压拖 Applications（未签名右键打开）；win 运行 nsis 安装器；linux 双击 AppImage（sandbox 处理见 §6 坑位）

@@ -2,7 +2,7 @@
 # dsh-desktop 壳包发布脚本（macOS 本地打 x64 + arm64 双架构壳）。
 # 壳包与内容包隔离发布（技术文档 dsh-shell-release-v0.3.0）：
 #   - 壳 tag：dsh-desktop-v<version>
-#   - 壳资产：dsh-desktop-shell-<os>-<arch>-<version>.zip
+#   - 壳资产：dsh-desktop-<os>-<arch>-<version>.zip（用户视角命名；os 用 mac/win/linux）
 #   - 不生成/不上传 latest.json（内容升级清单不受影响）
 #
 # Windows / Linux 壳包由 CI（.github/workflows/build-shell.yml）在对应
@@ -62,7 +62,7 @@ for ARCH in "${ARCHES[@]}"; do
     echo "未找到 darwin-$ARCH 壳产物: $SRC" >&2
     exit 1
   fi
-  ASSET="dsh-desktop-shell-darwin-${ARCH}-${VERSION}.zip"
+  ASSET="dsh-desktop-mac-${ARCH}-${VERSION}.zip"
   cp "$SRC" "$OUT_DIR/$ASSET"
   echo "== 产物: $OUT_DIR/$ASSET ($(du -h "$OUT_DIR/$ASSET" | cut -f1))"
 done

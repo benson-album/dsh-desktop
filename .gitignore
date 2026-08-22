@@ -13,3 +13,5 @@ build/release-artifacts/
 build/shell-artifacts/
 *.log
 .DS_Store
+iShot*.png
+icon-compare.png

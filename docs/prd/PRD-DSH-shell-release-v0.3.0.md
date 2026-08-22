@@ -48,7 +48,7 @@
 
 1. **发布者（macOS）**：跑 `bash scripts/publish-shell.sh 1.2.3` → 本地产出 x64+arm64 壳 zip → 上传到 `dsh-desktop-v1.2.3` Release。
 2. **发布者（全平台）**：推送触发 `build-shell` workflow → Windows/Linux runner 自动打壳 → 上传同一壳 Release。
-3. **用户（Intel Mac）**：想更新壳 → 下载 `dsh-desktop-shell-darwin-x64-1.2.3.zip` → 解压拖入 Applications。
+3. **用户（Intel Mac）**：想更新壳 → 下载 `dsh-desktop-mac-x64-1.2.3.zip` → 解压拖入 Applications。
 4. **用户（内容升级）**：完全无感知——壳包发布不触碰 `latest.json`，内容自动升级照常。
 
 ---
@@ -61,7 +61,7 @@
 
 | 编号 | 需求 | 优先级 | 验收标准 |
 |------|------|--------|----------|
-| FR-S1.1 | 本地打 mac 双架构壳 | P0 | `scripts/publish-shell.sh <version>` 产出 `dsh-desktop-shell-darwin-{x64,arm64}-<version>.zip` |
+| FR-S1.1 | 本地打 mac 双架构壳 | P0 | `scripts/publish-shell.sh <version>` 产出 `dsh-desktop-mac-{x64,arm64}-<version>.zip` |
 | FR-S1.2 | 壳包上传独立 tag | P0 | 上传到 `dsh-desktop-v<version>` Release（与内容 `dsh-v<version>` 区分） |
 | FR-S1.3 | 幂等 | P0 | 同 tag 重复执行覆盖资产，不产生重复 Release |
 
@@ -69,15 +69,15 @@
 
 | 编号 | 需求 | 优先级 | 验收标准 |
 |------|------|--------|----------|
-| FR-S2.1 | Windows 壳打包 | P0 | workflow 在 windows runner 打 `dsh-desktop-shell-win32-x64-<version>.zip`（nsis 安装器或便携版） |
-| FR-S2.2 | Linux 壳打包 | P0 | workflow 在 ubuntu runner 打 `dsh-desktop-shell-linux-x64-<version>.AppImage` |
+| FR-S2.1 | Windows 壳打包 | P0 | workflow 在 windows runner 打 `dsh-desktop-win-x64-<version>.zip`（nsis 安装器或便携版） |
+| FR-S2.2 | Linux 壳打包 | P0 | workflow 在 ubuntu runner 打 `dsh-desktop-linux-x64-<version>.AppImage` |
 | FR-S2.3 | 触发方式 | P1 | 手动 `workflow_dispatch`（打 tag 时触发）；可选后续自动 |
 
 ### 3.3 隔离与命名（FR-S3）
 
 | 编号 | 需求 | 优先级 | 验收标准 |
 |------|------|--------|----------|
-| FR-S3.1 | 资产命名前缀 | P0 | 壳资产统一 `dsh-desktop-shell-<os>-<arch>-<version>.<ext>`，与内容 `DeepSeek-Harness-*` 可区分 |
+| FR-S3.1 | 资产命名前缀 | P0 | 壳资产统一 `dsh-desktop-<os>-<arch>-<version>.<ext>`（os 用 mac/win/linux），与内容 `DeepSeek-Harness-*` 可区分 |
 | FR-S3.2 | 不进内容清单 | P0 | 壳资产**不写入** `latest.json`（内容升级逻辑零改动） |
 | FR-S3.3 | 标签命名 | P0 | 壳 tag 用 `dsh-desktop-v*`，内容 tag 保持 `dsh-v*`，互不覆盖 |
 
@@ -104,7 +104,7 @@
 | 决策点 | 结论（草案） | 说明 |
 |--------|--------------|------|
 | 壳 tag 命名 | `dsh-desktop-v<version>` | 与内容 `dsh-v<version>` 区分，天然隔离 |
-| 壳资产命名 | `dsh-desktop-shell-<os>-<arch>-<version>.<ext>` | 一眼可辨，glob 不与内容资产冲突 |
+| 壳资产命名 | `dsh-desktop-<os>-<arch>-<version>.<ext>`（os 用 mac/win/linux） | 用户视角命名，与内容资产（DeepSeek-Harness-*.tar.gz）明显区分 |
 | Windows 壳形态 | nsis 安装器（默认）+ 可选 portable | electron-builder win target 配置 |
 | Linux 壳形态 | AppImage | 免安装，双击运行 |
 | 壳自动更新 | 本版本不做（electron-updater 后续专项） | 手动下载安装；内容升级不受影响 |

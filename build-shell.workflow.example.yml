@@ -2,7 +2,7 @@
 # macOS 壳由发布者本地 publish-shell.sh 产出（macOS 主机无法可靠交叉打包）。
 #
 # 触发：workflow_dispatch（手动，输入 version）
-# 产出：dsh-desktop-shell-win32-x64-<version>.zip / …-linux-x64-<version>.AppImage
+# 产出：dsh-desktop-win-x64-<version>.zip / …-linux-x64-<version>.AppImage
 #       上传到 dsh-desktop-v<version> Release（壳 tag，与内容 tag dsh-v* 隔离）
 #
 # 注意：electron-builder 在 CI 需要可写缓存（electron_config_cache / ELECTRON_BUILDER_CACHE）。
@@ -27,11 +27,11 @@ jobs:
         include:
           - os: windows-latest
             target: win
-            asset_prefix: dsh-desktop-shell-win32-x64
+            asset_prefix: dsh-desktop-win-x64
             ext: zip
           - os: ubuntu-latest
             target: linux
-            asset_prefix: dsh-desktop-shell-linux-x64
+            asset_prefix: dsh-desktop-linux-x64
             ext: AppImage
     runs-on: ${{ matrix.os }}
     steps:

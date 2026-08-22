@@ -11,7 +11,7 @@
 
 ## 1. 设计原则
 
-1. **壳包与内容包完全隔离**：不同 tag（`dsh-desktop-v*` vs `dsh-v*`）、不同资产前缀（`dsh-desktop-shell-*` vs `DeepSeek-Harness-*`）、壳资产**永不写入** `latest.json`——内容升级逻辑零改动。
+1. **壳包与内容包完全隔离**：不同 tag（`dsh-desktop-v*` vs `dsh-v*`）、不同资产前缀（`dsh-desktop-*` vs `DeepSeek-Harness-*`）、壳资产**永不写入** `latest.json`——内容升级逻辑零改动。
 2. **复用现有发布基建**：`publish-shell.sh` 复用 `publish-release.sh` 的"先资产后清单"上传纪律（壳无清单，只有资产）。
 3. **平台打包边界明确**：macOS 双架构本地打；Windows/Linux 走 CI（runner 原生环境），不在 Mac 上交叉打。
 4. **壳版本独立**：壳 tag 版本号与内容版本解耦（壳迭代（如图标修复）不依赖上游发版）。
@@ -27,10 +27,10 @@ GitHub Releases — benson-album/dsh-desktop
 │   └── latest.json
 │
 └── dsh-desktop-v0.3.0                  ← 壳 tag（新增，发布者触发）
-    ├── dsh-desktop-shell-darwin-x64-0.3.0.zip      （本地打）
-    ├── dsh-desktop-shell-darwin-arm64-0.3.0.zip    （本地打）
-    ├── dsh-desktop-shell-win32-x64-0.3.0.zip       （CI 打，nsis）
-    └── dsh-desktop-shell-linux-x64-0.3.0.AppImage  （CI 打）
+    ├── dsh-desktop-mac-x64-0.3.0.zip             （本地打）
+    ├── dsh-desktop-mac-arm64-0.3.0.zip           （本地打）
+    ├── dsh-desktop-win-x64-0.3.0.zip              （CI 打，nsis）
+    └── dsh-desktop-linux-x64-0.3.0.AppImage       （CI 打）
 ```
 
 - 设备端内容升级只读 `latest.json` → 壳资产天然不可见，互不干扰。
@@ -72,7 +72,7 @@ linux:
 2. pnpm build（壳编译）
 3. 循环 arch  in (x64, arm64)：
      electron-builder --mac zip --x64 / --arm64   # 产出 .app 与 zip
-     mv zip → dsh-desktop-shell-darwin-<arch>-<version>.zip
+     mv zip → dsh-desktop-mac-<arch>-<version>.zip
 4. dry-run：仅本地产出；真实发布：
      gh release create dsh-desktop-v<version> <shell 资产> --repo …
      （资产逐个上传；无清单步骤）
@@ -97,9 +97,9 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            asset: dsh-desktop-shell-win32-x64
+            asset: dsh-desktop-win-x64
           - os: ubuntu-latest
-            asset: dsh-desktop-shell-linux-x64
+            asset: dsh-desktop-linux-x64
     runs-on: ${{ matrix.os }}
     steps:
       - checkout
@@ -107,7 +107,7 @@ jobs:
       - pnpm install
       - pnpm build
       - electron-builder --win / --linux（按 matrix）
-      - 资产重命名 → dsh-desktop-shell-<os>-x64-<version>.<ext>
+      - 资产重命名 → dsh-desktop-<os>-x64-<version>.<ext>
       - gh release create dsh-desktop-v<version>（不存在则建）或 upload --clobber
 ```
 
@@ -120,7 +120,7 @@ jobs:
 
 | 平台 | 步骤 |
 |---|---|
-| macOS | 下载 `dsh-desktop-shell-darwin-<arch>-<version>.zip` → 解压 → 拖 `DeepSeek Harness.app` 到 Applications；未签名需右键打开（Gatekeeper） |
+| macOS | 下载 `dsh-desktop-mac-<arch>-<version>.zip` → 解压 → 拖 `DeepSeek Harness.app` 到 Applications；未签名需右键打开（Gatekeeper） |
 | Windows | 下载 `…-win32-x64-<version>.zip` → 运行内部 nsis 安装器（或解压 portable） |
 | Linux | 下载 `….AppImage` → `chmod +x` → 双击运行（首次需处理 sandbox 权限） |
 

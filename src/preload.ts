@@ -79,6 +79,7 @@ const settingsApi = {
   openSettingsFile: (): Promise<void> => ipcRenderer.invoke('dsh:settings-open-file'),
   openDshSettingsFile: (): Promise<void> => ipcRenderer.invoke('dsh:settings-open-dsh-file'),
   openRepo: (): Promise<void> => ipcRenderer.invoke('dsh:settings-open-repo'),
+  browseDir: (): Promise<string | null> => ipcRenderer.invoke('dsh:settings-browse-dir'),
   close: (): void => ipcRenderer.send('dsh:settings-close'),
 }
 
@@ -148,9 +149,36 @@ const TOAST_ID = 'dsh-update-toast'
 const TOAST_STYLE_ID = 'dsh-toast-style'
 let toastDismissedTag = ''
 
+/** Toast copy follows the dsh-app UI language (same source as the menus). */
+type ToastText = {
+  title: (tag: string) => string
+  detail: string
+  failedTitle: string
+  dismiss: string
+  apply: string
+}
+const TOAST_TEXT: Record<string, ToastText> = {
+  zh: {
+    title: (tag) => `新版本 ${tag} 已就绪`,
+    detail: '已在后台构建完成，点击更新后需重启生效。',
+    failedTitle: '自动更新失败',
+    dismiss: '忽略',
+    apply: '立即更新',
+  },
+  en: {
+    title: (tag) => `New version ${tag} is ready`,
+    detail: 'Built in the background. Click update; a restart is needed.',
+    failedTitle: 'Update failed',
+    dismiss: 'Dismiss',
+    apply: 'Update Now',
+  },
+}
+
 /**
  * Non-modal bottom-right toast shown when the background build is ready.
  * Never interrupts the running GUI; it can be ignored or dismissed.
+ * Colors reference the harness design tokens (--dsw-alias-* on <body>, which
+ * follow light/dark theme) with hard-coded fallbacks when tokens are absent.
  */
 function injectUpdateToast(): void {
   if (document.getElementById(TOAST_ID) !== null) return
@@ -164,20 +192,32 @@ function injectUpdateToast(): void {
     #${TOAST_ID} {
       position: fixed; right: 16px; bottom: 16px; z-index: 2147483001;
       display: none; box-sizing: border-box; max-width: 360px;
-      background: rgba(28, 30, 34, 0.96); color: #e6e6e6;
-      border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+      background: var(--dsw-alias-bg-overlay, rgba(28, 30, 34, 0.96));
+      color: var(--dsw-alias-label-primary, #e6e6e6);
+      border: 1px solid var(--dsw-alias-border-l3, rgba(255,255,255,0.12));
+      border-radius: 10px;
       padding: 12px 14px; font: 12.5px/1.5 -apple-system, "PingFang SC", sans-serif;
       box-shadow: 0 8px 24px rgba(0,0,0,0.35);
     }
     #${TOAST_ID} .dsh-toast-title { font-weight: 600; margin-bottom: 4px; }
+    #${TOAST_ID} .dsh-toast-detail {
+      color: var(--dsw-alias-label-primary-dimmed, #9aa0a6); margin-top: 2px;
+    }
     #${TOAST_ID} .dsh-toast-actions { display: flex; gap: 8px; margin-top: 10px; justify-content: flex-end; }
     #${TOAST_ID} button {
-      background: #2f343d; color: #e6e6e6; border: 1px solid #3a4048;
+      background: var(--dsw-alias-interactive-bg-hover, #2f343d);
+      color: var(--dsw-alias-label-primary, #e6e6e6);
+      border: 1px solid var(--dsw-alias-border-l3, #3a4048);
       border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer;
     }
-    #${TOAST_ID} button:hover { background: #3a4048; }
-    #${TOAST_ID} button.dsh-primary { background: #0b5fff; border-color: #0b5fff; }
-    #${TOAST_ID} button.dsh-primary:hover { background: #2a74ff; }
+    #${TOAST_ID} button:hover {
+      background: var(--dsw-alias-interactive-bg-hover-accent, #3a4048);
+    }
+    #${TOAST_ID} button.dsh-primary {
+      background: var(--dsw-alias-button-primary-fill, #0b5fff);
+      border-color: var(--dsw-alias-button-primary-fill, #0b5fff);
+      color: var(--dsw-alias-label-primary-foreground, #ffffff);
+    }
     #${TOAST_ID}.dsh-fullscreen { display: none !important; }
   `
   const toast = document.createElement('div')
@@ -186,8 +226,8 @@ function injectUpdateToast(): void {
     <div class="dsh-toast-title"></div>
     <div class="dsh-toast-detail"></div>
     <div class="dsh-toast-actions">
-      <button class="dsh-dismiss">忽略</button>
-      <button class="dsh-apply dsh-primary">立即更新</button>
+      <button class="dsh-dismiss"></button>
+      <button class="dsh-apply dsh-primary"></button>
     </div>
   `
   const title = toast.querySelector('.dsh-toast-title') as HTMLElement
@@ -195,13 +235,19 @@ function injectUpdateToast(): void {
   const applyBtn = toast.querySelector('.dsh-apply') as HTMLButtonElement
   const dismissBtn = toast.querySelector('.dsh-dismiss') as HTMLButtonElement
 
+  let updateStateCache: UpdateStateInfo = { state: 'idle', fromCommit: '', toCommit: '', targetName: '', startedAt: 0, finishedAt: 0 }
+  let toastLang = 'zh'
+
   const showToast = (state: UpdateStateInfo): void => {
+    const T = TOAST_TEXT[toastLang === 'en' ? 'en' : 'zh']
+    applyBtn.textContent = T.apply
+    dismissBtn.textContent = T.dismiss
     if (state.state === 'ready' && state.tag !== toastDismissedTag) {
-      title.textContent = `新版本 ${state.tag ?? state.toCommit.slice(0, 12)} 已就绪`
-      detail.textContent = '已在后台构建完成，点击更新后需重启生效。'
+      title.textContent = T.title(state.tag ?? state.toCommit.slice(0, 12))
+      detail.textContent = T.detail
       toast.style.display = 'block'
     } else if (state.state === 'failed' && state.buildError !== undefined) {
-      title.textContent = '自动更新失败'
+      title.textContent = T.failedTitle
       detail.textContent = state.buildError.slice(0, 120)
       toast.style.display = 'block'
       applyBtn.style.display = 'none'
@@ -209,6 +255,10 @@ function injectUpdateToast(): void {
       toast.style.display = 'none'
     }
   }
+  void ipcRenderer.invoke('dsh:menu-language').then((lang: string) => {
+    toastLang = lang
+    showToast(updateStateCache)
+  })
   applyBtn.addEventListener('click', () => {
     toast.style.display = 'none'
     void ipcRenderer.invoke('dsh:apply-update')
@@ -219,7 +269,6 @@ function injectUpdateToast(): void {
     void ipcRenderer.invoke('dsh:dismiss-update')
   })
 
-  let updateStateCache: UpdateStateInfo = { state: 'idle', fromCommit: '', toCommit: '', targetName: '', startedAt: 0, finishedAt: 0 }
   ipcRenderer.on('dsh:update-event', (_e, state: UpdateStateInfo) => {
     updateStateCache = state
     showToast(state)

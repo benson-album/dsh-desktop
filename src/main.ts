@@ -1075,6 +1075,17 @@ function registerIpc(): void {
   ipcMain.handle('dsh:settings-open-file', () => void shell.openPath(SETTINGS_FILE))
   ipcMain.handle('dsh:settings-open-dsh-file', () => void shell.openPath(join(settings.dshHome, 'settings.yaml')))
   ipcMain.handle('dsh:settings-open-repo', () => void shell.openExternal(`https://github.com/${settings.releaseRepo}`))
+  // Native directory picker for harnessDir / DSH_HOME.
+  ipcMain.handle('dsh:settings-browse-dir', async () => {
+    if (settingsWindow === null || settingsWindow.isDestroyed()) return null
+    const result = await dialog.showOpenDialog(settingsWindow, {
+      title: '选择目录',
+      properties: ['openDirectory', 'createDirectory'],
+    })
+    return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
+  })
+  // Resolved UI language for preload-injected UI (toast), kept in sync with menus.
+  ipcMain.handle('dsh:menu-language', () => resolveMenuLanguage(settings.dshHome, app.getPreferredSystemLanguages()))
   ipcMain.on('dsh:settings-close', () => { settingsWindow?.close() })
   // Window control from the injected drag region (dblclick -> toggle maximize).
   // Only the main window's webContents may drive the window.

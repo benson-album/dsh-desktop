@@ -122,4 +122,17 @@ gh release create "$TAG" "$OUT_DIR/$ASSET" \
 echo "== 上传清单 latest.json"
 gh release upload "$TAG" "$OUT_DIR/latest.json" --repo "$REPO" --clobber
 
+# 6. 同步 latest.json 到仓库 main 分支：设备端从 raw.githubusercontent 读清单，
+#    不依赖 releases/latest（壳 release 会遮蔽内容 release 导致 404，见技术文档 §5）。
+echo "== 同步 latest.json 到仓库 main"
+BASE64="$(base64 < "$OUT_DIR/latest.json" | tr -d '\n')"
+SHA="$(curl -s --connect-timeout 20 -H "Authorization: token $GH_TOKEN" \
+  "https://api.github.com/repos/$REPO/contents/latest.json" \
+  | python3 -c "import json,sys;print(json.load(sys.stdin).get('sha',''))" 2>/dev/null || true)"
+BODY="{\"message\":\"chore: sync latest.json ($VERSION)\",\"content\":\"$BASE64\""
+[[ -n "$SHA" ]] && BODY="$BODY,\"sha\":\"$SHA\""
+BODY="$BODY}"
+curl -sS --connect-timeout 30 -X PUT -H "Authorization: token $GH_TOKEN" -H "Content-Type: application/json" \
+  -d "$BODY" "https://api.github.com/repos/$REPO/contents/latest.json" -o /dev/null -w "PUT HTTP %{http_code}\n"
+
 echo "== 发布完成: https://github.com/${REPO}/releases/tag/${TAG}"

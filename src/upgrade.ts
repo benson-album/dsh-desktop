@@ -149,10 +149,15 @@ export function matchAsset(manifest: ReleaseManifest, os: string, arch: string):
   return manifest.assets.find((a) => a.os === os && a.arch === arch) ?? null
 }
 
-/** Default manifest URL: the latest release's `latest.json` asset (GitHub follows the redirect). */
+/**
+ * Default manifest URL: the manifest is synced to the repo's main branch
+ * (`latest.json` at the repo root) so it does NOT depend on
+ * `releases/latest` — a newer shell release (dsh-desktop-v*) would shadow the
+ * content release and make `releases/latest/download/latest.json` 404.
+ */
 export function releaseManifestUrl(settings: UpgradeSettings): string {
   if (settings.releaseManifestUrl !== undefined && settings.releaseManifestUrl !== '') return settings.releaseManifestUrl
-  return `https://github.com/${settings.releaseRepo}/releases/latest/download/latest.json`
+  return `https://raw.githubusercontent.com/${settings.releaseRepo}/main/latest.json`
 }
 
 /* ─────────────────────────── update state machine ─────────────────────────── */

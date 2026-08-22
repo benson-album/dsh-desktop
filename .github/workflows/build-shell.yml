@@ -1,7 +1,9 @@
 # dsh-desktop 壳包发布（Windows/Linux）— CI 在对应 runner 上构建壳。
 # macOS 壳由发布者本地 publish-shell.sh 产出（macOS 主机无法可靠交叉打包）。
 #
-# 触发：workflow_dispatch（手动，输入 version）
+# 触发：
+#   - push 打 dsh-desktop-v* tag（自动云打包，version 取自 tag）
+#   - workflow_dispatch（手动，输入 version）
 # 产出：dsh-desktop-win-x64-<version>.zip / …-linux-x64-<version>.AppImage
 #       上传到 dsh-desktop-v<version> Release（壳 tag，与内容 tag dsh-v* 隔离）
 #
@@ -9,6 +11,9 @@
 name: build-shell
 
 on:
+  push:
+    tags:
+      - 'dsh-desktop-v*'
   workflow_dispatch:
     inputs:
       version:
@@ -74,7 +79,9 @@ jobs:
 
       - name: Rename artifact
         run: |
+          # 手动触发取输入；tag 触发取 GITHUB_REF_NAME（dsh-desktop-v0.3.3 → 0.3.3）
           VERSION="${{ github.event.inputs.version }}"
+          if [[ -z "${VERSION}" ]]; then VERSION="${GITHUB_REF_NAME#dsh-desktop-v}"; fi
           case "${{ matrix.target }}" in
             win)
               SRC="$(ls release/*.exe | head -1)"
@@ -93,7 +100,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # 手动触发取输入；tag 触发取 GITHUB_REF_NAME（dsh-desktop-v0.3.3 → 0.3.3）
           VERSION="${{ github.event.inputs.version }}"
+          if [[ -z "${VERSION}" ]]; then VERSION="${GITHUB_REF_NAME#dsh-desktop-v}"; fi
           TAG="dsh-desktop-v${VERSION}"
           gh release create "${TAG}" "${{ steps.rename.outputs.asset }}" \
             --repo "${{ github.repository }}" \

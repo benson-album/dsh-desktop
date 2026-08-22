@@ -48,6 +48,42 @@ const api = {
 
 contextBridge.exposeInMainWorld('dsh', api)
 
+/* ── settings window API (src/settings.html) ── */
+
+export interface SettingsSnapshot {
+  updateSource: string
+  channel: string
+  autoCheck: boolean
+  autoCheckIntervalMs: number
+  releaseManifestUrl?: string
+  releaseDownloadMirrors?: string[]
+  harnessDir: string
+  dshHome: string
+  appHome: string
+  releaseRepo: string
+  remote: string
+  releaseAssetPattern: string
+  tagPrefix: string
+  nodePath?: string
+  pnpmPath?: string
+  gitPath?: string
+  locale: string
+  appVersion: string
+  harnessVersion: string
+  updateState: string
+}
+
+const settingsApi = {
+  get: (): Promise<SettingsSnapshot> => ipcRenderer.invoke('dsh:settings-get'),
+  save: (patch: Record<string, unknown>): Promise<boolean> => ipcRenderer.invoke('dsh:settings-save', patch),
+  openSettingsFile: (): Promise<void> => ipcRenderer.invoke('dsh:settings-open-file'),
+  openDshSettingsFile: (): Promise<void> => ipcRenderer.invoke('dsh:settings-open-dsh-file'),
+  openRepo: (): Promise<void> => ipcRenderer.invoke('dsh:settings-open-repo'),
+  close: (): void => ipcRenderer.send('dsh:settings-close'),
+}
+
+contextBridge.exposeInMainWorld('dshSettings', settingsApi)
+
 /** Mirror of the main-process UpdateStateFile (only the fields the UI needs). */
 export interface UpdateStateInfo {
   state: string

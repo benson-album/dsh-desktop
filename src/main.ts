@@ -121,7 +121,7 @@ function pruneBackendLogs(): void {
   } catch { /* best effort */ }
 }
 
-const settings = loadSettings()
+let settings = loadSettings()
 const extraEnv = loadEnvFile()
 
 /** Backend child environment: augmented PATH, DSH_HOME, app env file. */
@@ -651,19 +651,139 @@ function relaunchApp(): void {
 }
 
 /** Background scheduler: first check shortly after launch, then periodically. */
+let autoCheckTimer: NodeJS.Timeout | null = null
 function scheduleAutoCheck(): void {
+  if (autoCheckTimer !== null) { clearTimeout(autoCheckTimer); autoCheckTimer = null }
   if (!settings.autoCheck || SMOKE) return
   const tick = (): void => {
-    setTimeout(() => {
+    autoCheckTimer = setTimeout(() => {
       void runUpdateCheck(false)
       tick()
     }, settings.autoCheckIntervalMs)
   }
-  setTimeout(() => {
+  autoCheckTimer = setTimeout(() => {
     void runUpdateCheck(false)
     tick()
   }, 20_000)
 }
+
+/* ─────────────────────────────── settings window ─────────────────────────────── */
+
+let settingsWindow: BrowserWindow | null = null
+
+function openSettingsWindow(): void {
+  if (settingsWindow !== null && !settingsWindow.isDestroyed()) {
+    settingsWindow.focus()
+    return
+  }
+  settingsWindow = new BrowserWindow({
+    width: 480,
+    height: 600,
+    title: '应用设置',
+    resizable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    webPreferences: {
+      preload: join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  settingsWindow.on('closed', () => { settingsWindow = null })
+  void settingsWindow.loadFile(join(__dirname, 'settings.html'))
+}
+
+/** Snapshot for the settings page (settings + dsh locale + read-only info). */
+function settingsSnapshot(): Record<string, unknown> {
+  const s = describeHarness(settings, process.env)
+  return {
+    ...settings,
+    locale: resolveMenuLanguage(settings.dshHome, app.getPreferredSystemLanguages()),
+    appHome: APP_HOME,
+    appVersion: app.getVersion(),
+    harnessVersion: s.version,
+    updateState: `${updateState.state}${updateState.tag !== undefined ? ` (${updateState.tag})` : ''}`,
+  }
+}
+
+/** Atomically write settings.json (temp file + rename). */
+function writeSettingsFile(data: Record<string, unknown>): void {
+  const tmp = `${SETTINGS_FILE}.tmp`
+  writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n')
+  renameSync(tmp, SETTINGS_FILE)
+}
+
+/** Merge a patch into settings.json (undefined values delete keys), then re-apply. */
+function saveSettings(patch: Record<string, unknown>): boolean {
+  try {
+    if (patch.reset === true) {
+      writeSettingsFile({})
+      settings = loadSettings()
+      scheduleAutoCheck()
+      return true
+    }
+    const existing = existsSync(SETTINGS_FILE)
+      ? JSON.parse(readFileSync(SETTINGS_FILE, 'utf8')) as Record<string, unknown>
+      : {} as Record<string, unknown>
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === undefined) delete existing[k]
+      else existing[k] = v
+    }
+    writeSettingsFile(existing)
+    settings = loadSettings()
+    scheduleAutoCheck()
+    buildMenu()
+    // 语言切换：写入 ~/.dsh/settings.yaml（壳菜单联动）
+    const locale = patch.locale
+    if (typeof locale === 'string' && (locale === 'zh' || locale === 'en')) {
+      setDshLocale(settings.dshHome, locale)
+    }
+    return true
+  } catch (err) {
+    log(`[settings] save failed: ${String(err)}`)
+    return false
+  }
+}
+
+/** Lightweight YAML write: update `locale.preference` in ~/.dsh/settings.yaml, keeping the rest. */
+function setDshLocale(dshHome: string, locale: string): void {
+  const file = join(dshHome, 'settings.yaml')
+  let content = ''
+  try { content = readFileSync(file, 'utf8') } catch { /* new file */ }
+  const lines = content.split('\n')
+  const out: string[] = []
+  let inLocale = false
+  let replaced = false
+  for (const line of lines) {
+    if (/^locale\s*:/.test(line)) { inLocale = true; out.push('locale:'); continue }
+    if (inLocale) {
+      if (/^\s*preference\s*:/.test(line)) {
+        out.push(`  preference: ${locale}`)
+        inLocale = false
+        replaced = true
+        continue
+      }
+      if (/^\S/.test(line) || line.trim() === '') {
+        inLocale = false
+        out.push(line)
+        continue
+      }
+      out.push(line) // other nested keys under locale
+      continue
+    }
+    out.push(line)
+  }
+  if (!replaced) {
+    if (out.length > 0 && out[out.length - 1].trim() !== '') out.push('')
+    out.push('locale:', `  preference: ${locale}`)
+  }
+  try {
+    writeFileSync(file, out.join('\n') + '\n')
+    log(`[settings] dsh locale -> ${locale}`)
+  } catch (err) { log(`[settings] write ${file} failed: ${String(err)}`) }
+}
+
 
 /** First run: unpack the bundled harness into the run dir (no git, no network). */
 async function extractIfNeeded(): Promise<void> {
@@ -819,6 +939,11 @@ function buildMenu(): void {
           click: () => void runUpdateCheck(true),
         },
         {
+          label: T.settings,
+          accelerator: 'CmdOrCtrl+,',
+          click: () => openSettingsWindow(),
+        },
+        {
           label: T.restartBackend,
           accelerator: 'CmdOrCtrl+Shift+R',
           enabled: !updateBusy,
@@ -941,6 +1066,13 @@ function registerIpc(): void {
   ipcMain.handle('dsh:restart-backend', () => void restartBackend())
   ipcMain.handle('dsh:open-logs', () => void shell.openPath(LOGS_DIR))
   ipcMain.handle('dsh:cancel-upgrade', () => { updateSignal?.abort(); return true })
+  // Settings window
+  ipcMain.handle('dsh:settings-get', () => settingsSnapshot())
+  ipcMain.handle('dsh:settings-save', (_e, patch: Record<string, unknown>) => saveSettings(patch ?? {}))
+  ipcMain.handle('dsh:settings-open-file', () => void shell.openPath(SETTINGS_FILE))
+  ipcMain.handle('dsh:settings-open-dsh-file', () => void shell.openPath(join(settings.dshHome, 'settings.yaml')))
+  ipcMain.handle('dsh:settings-open-repo', () => void shell.openExternal(`https://github.com/${settings.releaseRepo}`))
+  ipcMain.on('dsh:settings-close', () => { settingsWindow?.close() })
   // Window control from the injected drag region (dblclick -> toggle maximize).
   // Only the main window's webContents may drive the window.
   ipcMain.on('dsh:window-control', (event, action: unknown) => {

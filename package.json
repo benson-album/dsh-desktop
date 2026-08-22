@@ -6,7 +6,7 @@
   "private": true,
   "main": "dist/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && node -e \"require('node:fs').copyFileSync('src/progress.html','dist/progress.html')\"",
+    "build": "tsc -p tsconfig.json && node -e \"const fs=require('node:fs');for(const f of ['progress.html','settings.html']){fs.copyFileSync('src/'+f,'dist/'+f)}\"",
     "start": "npm run build && electron .",
     "smoke": "npm run build && electron . --smoke",
     "test": "npm run build && node scripts/test-upgrade-release.js",

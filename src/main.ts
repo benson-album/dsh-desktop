@@ -18,6 +18,7 @@ import {
 } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createInterface } from 'node:readline'
+import { get as httpsGet } from 'node:https'
 import {
   appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, unlinkSync, watch, writeFileSync,
 } from 'node:fs'
@@ -493,9 +494,91 @@ async function runUpdateCheck(manual: boolean): Promise<void> {
             ? `新版本 ${s.tag ?? s.toCommit.slice(0, 12)} 已就绪`
             : `当前状态：${s.state}`
       if (!SMOKE) void dialog.showMessageBox({ type: 'info', message: detail, buttons: ['好'] })
+      // 壳（应用）更新检测：查 GitHub 最新 dsh-desktop-v* Release，与本地 app 版本对比
+      const shellTag = await checkShellUpdate().catch(() => null)
+      if (shellTag !== null && !SMOKE) {
+        const { response } = await dialog.showMessageBox({
+          type: 'info',
+          message: `发现新应用版本 ${shellTag}`,
+          detail: `当前应用版本 ${app.getVersion()}。\n点击「打开下载页」前往 GitHub Releases 手动安装新版本（数据与会话不受影响）。`,
+          buttons: ['打开下载页', '稍后'],
+          defaultId: 0,
+          cancelId: 1,
+        })
+        if (response === 0) {
+          void shell.openExternal(`https://github.com/${settings.releaseRepo}/releases/tag/${shellTag}`)
+        }
+      }
     }
     buildMenu()
   }
+}
+
+/**
+ * Check the latest shell (application) release on GitHub (`dsh-desktop-v*` tags).
+ * Returns the newer tag when one exists, otherwise null. Uses the releases API
+ * (not `releases/latest` — the content release may shadow it, same trap as the
+ * manifest URL).
+ */
+async function checkShellUpdate(): Promise<string | null> {
+  const latest = await fetchLatestShellTag(settings.releaseRepo)
+  if (latest === null) return null
+  if (isNewerVersion(latest, app.getVersion())) return latest
+  return null
+}
+
+/** Query the newest `dsh-desktop-v*` tag among the repo's releases (API, public repo). */
+function fetchLatestShellTag(repo: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    let done = false
+    const finish = (v: string | null): void => { if (!done) { done = true; resolve(v) } }
+    const req = httpsGet(
+      `https://api.github.com/repos/${repo}/releases?per_page=100`,
+      { headers: { 'User-Agent': 'dsh-desktop-updater', 'Accept': 'application/vnd.github+json' } },
+      (res) => {
+        if (res.statusCode !== 200) { res.resume(); finish(null); return }
+        let body = ''
+        res.on('data', (c) => { body += c })
+        res.on('end', () => {
+          try {
+            const releases = JSON.parse(body) as Array<{ tag_name?: string }>
+            const shellTags = releases
+              .map((r) => r.tag_name ?? '')
+              .filter((t) => t.startsWith('dsh-desktop-v'))
+            finish(shellTags[0] ?? null)
+          } catch { finish(null) }
+        })
+        res.on('error', () => finish(null))
+      },
+    )
+    req.on('error', () => finish(null))
+    setTimeout(() => req.destroy(), 20_000)
+  })
+}
+
+/** `dsh-desktop-vX.Y.Z` → `X.Y.Z` (strip the prefix). */
+function shellTagVersion(tag: string): string {
+  return tag.replace(/^dsh-desktop-v/, '')
+}
+
+/** True when `candidate` is a newer release than `current` (numeric semver, rc aware). */
+function isNewerVersion(candidateTag: string, current: string): boolean {
+  const parse = (v: string): { nums: number[]; rc: boolean } => {
+    const clean = v.trim().replace(/^v/, '')
+    const rc = /-rc\./.test(clean)
+    const nums = (clean.split(/[-+]/)[0] ?? '').split('.').map((n) => Number(n) || 0)
+    return { nums, rc }
+  }
+  const c = parse(candidateTag.startsWith('dsh-desktop-v') ? shellTagVersion(candidateTag) : candidateTag)
+  const cur = parse(current)
+  const len = Math.max(c.nums.length, cur.nums.length)
+  for (let i = 0; i < len; i++) {
+    const a = c.nums[i] ?? 0
+    const b = cur.nums[i] ?? 0
+    if (a !== b) return a > b
+  }
+  if (c.rc !== cur.rc) return !c.rc // 稳定版 > rc
+  return false
 }
 
 /** User clicked "更新" on the toast: swap in the built version, then ask to restart. */

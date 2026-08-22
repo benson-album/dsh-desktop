@@ -175,6 +175,7 @@ latest.json → 创建本仓库 Release（资产先、清单后）。手动触�
 - Windows / Linux（CI）：GitHub Actions 页手动运行 `build-shell` workflow，输入 version → 自动打 win32-x64 zip 与 linux-x64 AppImage 并上传同一壳 tag
 - 安装：mac 解压拖 Applications（未签名右键打开）；win 运行 nsis 安装器；linux 双击 AppImage（sandbox 处理见 §6 坑位）
 - 数据目录 `~/.dsh` 与 `~/dsh-app` 不受壳替换影响
+- **壳更新检测**（v0.3.0）：菜单"检查更新"会同时查 GitHub 最新 `dsh-desktop-v*` Release，与本地 `app.getVersion()`（= package.json version）对比，发现新版本弹窗跳转下载页。**约定：发壳时同步提升 package.json version 与 tag 一致**
 
 ---
 

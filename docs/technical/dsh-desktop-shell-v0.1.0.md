@@ -208,8 +208,9 @@ state=applied → startBackend() → 弹窗"已生效，建议重启" [立即重
 `settings.json`（`~/dsh-app/settings.json`，缺省用代码默认值）：`channel: tag|master`、`tagPrefix: dsh-v`、`autoCheck`（默认 true）、`autoCheckIntervalMs`（默认 6h）、`remote`。
 
 - **更新源** `updateSource`：`release`（默认，从 GitHub Releases 下载预构建包）或 `source`（git 源码构建式，即 §6.2~6.4 的既有管线）。
-  - `release`：清单 URL `https://github.com/<releaseRepo>/releases/latest/download/latest.json`；`releaseRepo`（默认 `benson-album/dsh-desktop`）、`releaseAssetPattern`（默认 `DeepSeek-Harness-*-<os>-<arch>.zip`）匹配当前平台资产；**该仓库必须已发布含 `latest.json` 的 release，否则检查更新报 HTTP 404**。
+  - `release`：清单 URL `https://github.com/<releaseRepo>/releases/latest/download/latest.json`；`releaseRepo`（默认 `benson-album/dsh-desktop`）、`releaseAssetPattern`（默认 `DeepSeek-Harness-*-<os>-<arch>.tar.gz`，资产为 tar.gz，见 K-17）匹配当前平台资产；**该仓库必须已发布含 `latest.json` 的 release，否则检查更新报 HTTP 404**（K-16）。
   - `source`：git fetch + tag 解析 + 后台构建（K-14 后无 .git 构建区亦可用）。发布资产未就绪时应切回此通道（K-16）。
+  - **联动**：`channel` 仅 source 通道生效（tag 跟随发布标签 / master 跟随主分支）；release 通道固定跟随最新发布标签，设置窗口在 release 下禁用 channel 选择（K-18）。
 
 ### 6.6 更新提示条（FR-D6）
 
@@ -288,3 +289,4 @@ state=applied → startBackend() → 弹窗"已生效，建议重启" [立即重
 | v0.1 | 2026-08-20 | 修订⑤：构建区注入 `DSH_CLIENT_COMMIT_HASH` 修复 rc.8 起 `pnpm build` 失败（§6.3/K-14） |
 | v0.1 | 2026-08-20 | 修订⑥：dirty 提示文案显示实际运行区路径；运行区脏阻塞升级排查入档（§6.4/K-15） |
 | v0.1 | 2026-08-20 | 修订⑦：settings.json 支持 `updateSource`/`releaseRepo`/`releaseAssetPattern`（release 通道，§6.5/K-16）；release 404 排查入档 |
+| v0.1 | 2026-08-20 | 修订⑧：壳层 UI 对齐内置设置——更新源↔通道联动（§6.5）、harnessDir/DSH_HOME 目录选择器、toast 改用设计令牌+双语（§6.6）、设置窗口全量双语与文案纠错（K-18） |

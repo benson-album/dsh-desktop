@@ -224,3 +224,4 @@ DeepSeek Harness 的 Web GUI 目前通过浏览器访问（`dsh --profile web` �
 | v0.1.0 | 2026-08-20 | 修订⑤：自动更新构建区注入 `DSH_CLIENT_COMMIT_HASH`，修复 rc.8 起 `pnpm build` 因构建区无 `.git` 而失败（K-14，FR-D4.3） |
 | v0.1.0 | 2026-08-20 | 修订⑥：dirty 提示文案显示实际运行区路径；运行区脏阻塞升级排查入档（K-15，FR-D4.5） |
 | v0.1.0 | 2026-08-20 | 修订⑦：release 更新通道（latest.json 清单下载式）配置入档；release 404 排查入档（K-16，FR-D4.2） |
+| v0.1.0 | 2026-08-20 | 修订⑧：壳层 UI 对齐内置设置——更新源↔通道联动、harnessDir/DSH_HOME 目录选择器、toast 主题/双语、设置窗口全量双语与文案纠错（K-18，FR-D4.3/D5） |

@@ -128,3 +128,4 @@
 | 版本 | 日期 | 变更 |
 |------|------|------|
 | v0.3.0 | 2026-08-21 | 首次成稿：壳包发布专项 PRD（草案，待评审）；内容升级体系（v0.2.0）保持不变 |
+| v0.3.0 | 2026-08-22 | 实施修订：壳资产命名 `dsh-desktop-<os>-<arch>-<ver>`（用户视角，os 用 mac/win/linux）；build-shell 云打包（win/linux）+ 打 dsh-desktop-v* tag 自动触发；壳更新检测（⌘U 对比 GitHub 壳 tag）；发布节奏约定（P0 立即 / 常规累积，见 AGENTS.md） |

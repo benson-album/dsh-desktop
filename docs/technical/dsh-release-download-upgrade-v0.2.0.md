@@ -373,4 +373,5 @@ GitHub Actions：strategy.matrix { os: [macos-13, macos-14, windows-latest, ubun
 | v0.2.0 | 2026-08-20 | 首次成稿：产物下载式升级技术方案（草案，待评审）；既有源码构建式管线完整保留 |
 | v0.2.0 | 2026-08-20 | 增补 §3.2 自动发布流水线（GitHub Actions 上游同步 + 自动打包上传），并同步改动清单/风险/测试/实施顺序 |
 | v0.2.0 | 2026-08-20 | 新增 §13 多架构与跨平台支持（预留设计）：清单协议（schemaVersion/os）、产物命名规范、构建矩阵、设备端匹配逻辑；协议层本期落地，多平台构建后续实施 |
+| v0.2.0 | 2026-08-22 | 实施修订：清单 URL 改 jsDelivr CDN（raw.githubusercontent 国内不可达）且发布流程同步清单到仓库 main；资产下载多镜像择优（releaseDownloadMirrors，best-first + 失败切换 + 会话记忆）；Windows 打包 gzip -1 管道（bsdtar -I 陷阱）、upload 显式路径、finalize 同步 main；上游 rc tag 用 ls-remote 版本排序（releases/latest 对 prerelease 404） |
 | v0.2.0 | 2026-08-20 | 实施修订：产物格式由 zip 改为 **tar.gz**（node_modules 海量小文件下打包快一个数量级，且 darwin/win32/linux 系统 tar 原生解压、设备端零 unzip 依赖）；§3.1 发布步骤与 publish-release.sh 对齐；协议/命名/风险/测试同步更新 |

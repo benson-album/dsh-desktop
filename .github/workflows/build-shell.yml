@@ -52,6 +52,12 @@ jobs:
           pnpm install --frozen-lockfile || pnpm install
         shell: bash
 
+      # electron 的 postinstall（下载当前平台 Electron 运行时到 node_modules/electron/dist）
+      # 可能被 pnpm 跳过；electron-builder 的 electronDist 配置指向该目录，必须先补齐。
+      - name: Fetch Electron runtime
+        run: node node_modules/electron/install.js
+        shell: bash
+
       - name: Build shell (tsc)
         run: pnpm build
         shell: bash

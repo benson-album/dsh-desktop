@@ -1,7 +1,7 @@
 {
   "name": "dsh-desktop",
   "productName": "DeepSeek Harness",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "DeepSeek Harness desktop shell: an Electron launcher that runs the dsh web backend (spawned with the system Node) and opens the harness GUI in a native window, with git-managed self-upgrades.",
   "private": true,
   "main": "dist/main.js",

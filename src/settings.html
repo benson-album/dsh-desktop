@@ -61,6 +61,20 @@
     border: 1px solid var(--border); background: var(--input-bg);
     color: var(--text); font-size: 12.5px;
   }
+  /* select 自定义外观：屏蔽 macOS 系统强调色（可能为橙色），统一品牌蓝 */
+  .field select {
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' stroke='%236e6e73' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+    accent-color: var(--accent);
+  }
+  .field select:hover { border-color: var(--accent); }
+  .field select:focus {
+    border-color: var(--accent); outline: none;
+    box-shadow: 0 0 0 3px rgba(11, 95, 255, 0.18);
+  }
   .field textarea { resize: vertical; min-height: 52px; font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; }
   .field .btn-group { display: flex; gap: 8px; }
   .field .btn-group button {
@@ -68,6 +82,15 @@
     border: 1px solid var(--border); background: var(--input-bg); color: var(--text); font-size: 12.5px;
   }
   .field .btn-group button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* 带“浏览…”按钮的路径输入 */
+  .path-row { display: flex; gap: 6px; }
+  .path-row input[type="text"] { flex: 1; }
+  .path-row button {
+    flex: none; padding: 0 14px; border-radius: 7px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--input-bg); color: var(--text); font-size: 12px;
+  }
+  .path-row button:hover { background: var(--hover); }
 
   details.advanced { margin-top: 2px; }
   details.advanced summary { color: var(--muted); font-size: 12px; cursor: pointer; padding: 4px 0; }
@@ -95,62 +118,63 @@
   <div class="drag-strip"></div>
   <div class="app">
     <nav id="nav">
-      <div class="nav-item active" data-panel="updates"><span class="ico">⟳</span>更新与升级</div>
-      <div class="nav-item" data-panel="paths"><span class="ico">📁</span>目录与数据</div>
-      <div class="nav-item" data-panel="github"><span class="ico">🐙</span>GitHub</div>
-      <div class="nav-item" data-panel="tools"><span class="ico">🔧</span>工具链</div>
-      <div class="nav-item" data-panel="dsh"><span class="ico">⚙</span>dsh 应用设置</div>
-      <div class="nav-item" data-panel="about"><span class="ico">ℹ</span>关于</div>
+      <div class="nav-item active" data-panel="updates"><span class="ico">⟳</span><span data-i18n="nav-updates">更新与升级</span></div>
+      <div class="nav-item" data-panel="paths"><span class="ico">📁</span><span data-i18n="nav-paths">目录与数据</span></div>
+      <div class="nav-item" data-panel="github"><span class="ico">🐙</span><span data-i18n="nav-github">GitHub</span></div>
+      <div class="nav-item" data-panel="tools"><span class="ico">🔧</span><span data-i18n="nav-tools">工具链</span></div>
+      <div class="nav-item" data-panel="dsh"><span class="ico">⚙</span><span data-i18n="nav-dsh">dsh 应用设置</span></div>
+      <div class="nav-item" data-panel="about"><span class="ico">ℹ</span><span data-i18n="nav-about">关于</span></div>
     </nav>
 
     <main>
       <!-- ── 更新与升级 ── -->
       <section class="panel active" id="panel-updates">
-        <div class="panel-title">更新与升级</div>
-        <div class="panel-desc">内容升级方式与检查策略。标注「重启生效」的项保存后需重启应用。</div>
+        <div class="panel-title" data-i18n="updates-title">更新与升级</div>
+        <div class="panel-desc" data-i18n="updates-desc">内容升级方式与检查策略。标注「重启生效」的项保存后需重启应用。</div>
 
         <div class="field">
-          <label>更新源（updateSource）<span style="color:var(--muted)"> · 重启生效</span></label>
+          <label><span data-i18n="updates-source-label">更新源（updateSource）</span><span style="color:var(--muted)"> · <span data-i18n="restart-hint">重启生效</span></span></label>
           <select id="updateSource">
-            <option value="release">release — 产物下载（推荐）</option>
-            <option value="source">source — 源码构建</option>
+            <option value="release" data-i18n="updates-source-release">release — 产物下载（推荐）</option>
+            <option value="source" data-i18n="updates-source-source">source — 源码构建</option>
           </select>
-          <div class="hint">release：下载打包好的 tar.gz（快、无需构建环境）；source：拉源码本地 pnpm 构建。</div>
+          <div class="hint" data-i18n="updates-source-hint">release：下载打包好的 tar.gz 产物（快、无需构建环境）；source：拉源码本地 pnpm 构建。</div>
         </div>
 
         <div class="field">
-          <label>内容通道（channel）<span style="color:var(--muted)"> · 重启生效</span></label>
+          <label><span data-i18n="updates-channel-label">内容通道（channel）</span><span style="color:var(--muted)"> · <span data-i18n="restart-hint">重启生效</span></span></label>
           <select id="channel">
-            <option value="tag">tag — 最新发布标签</option>
-            <option value="master">master — 最新主分支</option>
+            <option value="tag" data-i18n="updates-channel-tag">tag — 最新发布标签</option>
+            <option value="master" data-i18n="updates-channel-master">master — 最新主分支</option>
           </select>
+          <div class="hint" id="channel-hint" data-i18n="updates-channel-hint">source 通道：跟随最新发布标签（tag）或主分支（master）。</div>
         </div>
 
         <div class="field">
-          <label>自动检查更新（autoCheck）</label>
+          <label data-i18n="updates-autocheck-label">自动检查更新（autoCheck）</label>
           <div class="btn-group">
-            <button id="autoCheck-on">开</button><button id="autoCheck-off">关</button>
+            <button id="autoCheck-on" data-i18n="on">开</button><button id="autoCheck-off" data-i18n="off">关</button>
           </div>
         </div>
 
         <div class="field">
-          <label>自动检查间隔（小时）</label>
+          <label data-i18n="updates-interval-label">自动检查间隔（小时）</label>
           <input type="text" id="autoCheckIntervalMs" placeholder="6">
-          <div class="hint">启动后 20s 首检，此后按此间隔。默认 6 小时。</div>
+          <div class="hint" data-i18n="updates-interval-hint">启动后 20s 首检，此后按此间隔。默认 6 小时。</div>
         </div>
 
         <details class="advanced">
-          <summary>高级（清单与镜像）</summary>
+          <summary data-i18n="adv-summary">高级（清单与镜像）</summary>
           <div class="inner">
             <div class="field">
-              <label>清单 URL（releaseManifestUrl）</label>
-              <input type="text" id="releaseManifestUrl" placeholder="留空使用默认（jsDelivr）">
-              <div class="hint">留空 = jsDelivr CDN 镜像；也可自定义。</div>
+              <label>releaseManifestUrl</label>
+              <input type="text" id="releaseManifestUrl" data-i18n-ph="manifest-ph" placeholder="https://github.com/owner/repo/releases/latest/download/latest.json">
+              <div class="hint" data-i18n="manifest-hint">留空使用默认：https://github.com/&lt;releaseRepo&gt;/releases/latest/download/latest.json</div>
             </div>
             <div class="field">
-              <label>下载镜像（releaseDownloadMirrors，每行一个）</label>
-              <textarea id="releaseDownloadMirrors" placeholder="https://ghfast.top/"></textarea>
-              <div class="hint">ghproxy 风格前缀；留空使用内置默认镜像列表。按序择优，失败自动切换。</div>
+              <label data-i18n="mirrors-label">下载镜像（releaseDownloadMirrors，每行一个）</label>
+              <textarea id="releaseDownloadMirrors" data-i18n-ph="mirrors-ph" placeholder="https://ghfast.top/"></textarea>
+              <div class="hint" data-i18n="mirrors-hint">ghproxy 风格前缀（会拼在 GitHub 资产 URL 前，如 https://ghfast.top/https://github.com/…）；留空使用内置默认镜像列表。按序择优，失败自动切换；sha256 校验保证完整性。</div>
             </div>
           </div>
         </details>
@@ -158,46 +182,52 @@
 
       <!-- ── 目录与数据 ── -->
       <section class="panel" id="panel-paths">
-        <div class="panel-title">目录与数据</div>
-        <div class="panel-desc">升级替换永不触碰用户数据目录。修改后需重启生效。</div>
+        <div class="panel-title" data-i18n="paths-title">目录与数据</div>
+        <div class="panel-desc" data-i18n="paths-desc">升级替换永不触碰用户数据目录。修改后需重启生效。</div>
 
         <div class="field">
-          <label>harness 目录（harnessDir）</label>
-          <input type="text" id="harnessDir" placeholder="/Users/you/dsh-app/harness">
-          <div class="hint">运行区：存放被升级的 harness 内容。</div>
+          <label data-i18n="paths-harness-label">harness 目录（harnessDir）</label>
+          <div class="path-row">
+            <input type="text" id="harnessDir" data-i18n-ph="paths-harness-ph" placeholder="/Users/you/dsh-app/harness">
+            <button id="browse-harnessDir" data-i18n="browse">浏览…</button>
+          </div>
+          <div class="hint" data-i18n="paths-harness-hint">运行区：存放被升级的 harness 内容。改动后重启生效。</div>
         </div>
         <div class="field">
-          <label>数据目录（DSH_HOME）</label>
-          <input type="text" id="dshHome" placeholder="/Users/you/.dsh">
-          <div class="hint">用户数据：sessions / storages / profiles，升级不受影响。</div>
+          <label data-i18n="paths-dshhome-label">数据目录（DSH_HOME）</label>
+          <div class="path-row">
+            <input type="text" id="dshHome" data-i18n-ph="paths-dshhome-ph" placeholder="/Users/you/.dsh">
+            <button id="browse-dshHome" data-i18n="browse">浏览…</button>
+          </div>
+          <div class="hint" data-i18n="paths-dshhome-hint">用户数据：sessions / storages / profiles，升级不受影响。改动后重启生效。</div>
         </div>
-        <div class="readonly-line"><b>壳数据目录</b><span id="appHome">—</span></div>
+        <div class="readonly-line"><b data-i18n="paths-apphome-label">壳数据目录</b><span id="appHome">—</span></div>
       </section>
 
       <!-- ── GitHub ── -->
       <section class="panel" id="panel-github">
-        <div class="panel-title">GitHub</div>
-        <div class="panel-desc">发布仓库与版本匹配规则。</div>
+        <div class="panel-title" data-i18n="github-title">GitHub</div>
+        <div class="panel-desc" data-i18n="github-desc">发布仓库与版本匹配规则。</div>
 
         <div class="field">
-          <label>发布仓库（releaseRepo）</label>
-          <input type="text" id="releaseRepo" placeholder="owner/repo">
-          <div class="hint">承载 Releases 与 latest.json 清单的仓库。</div>
+          <label data-i18n="github-repo-label">发布仓库（releaseRepo）</label>
+          <input type="text" id="releaseRepo" data-i18n-ph="github-repo-ph" placeholder="owner/repo">
+          <div class="hint" data-i18n="github-repo-hint">承载 Releases 与 latest.json 清单的仓库。</div>
         </div>
         <div class="field">
-          <label>内容通道 remote（source 通道）<span style="color:var(--muted)"> · 重启生效</span></label>
-          <input type="text" id="remote" placeholder="https://github.com/deepseek-ai/deepseek-harness.git">
+          <label data-i18n="github-remote-label">内容通道 remote（source 通道）<span style="color:var(--muted)"> · <span data-i18n="restart-hint">重启生效</span></span></label>
+          <input type="text" id="remote" data-i18n-ph="github-remote-ph" placeholder="https://github.com/deepseek-ai/deepseek-harness.git">
         </div>
         <details class="advanced">
-          <summary>高级</summary>
+          <summary data-i18n="adv-summary2">高级</summary>
           <div class="inner">
             <div class="field">
-              <label>资产匹配模式（releaseAssetPattern）</label>
+              <label data-i18n="github-pattern-label">资产匹配模式（releaseAssetPattern）</label>
               <input type="text" id="releaseAssetPattern">
             </div>
             <div class="field">
-              <label>版本标签前缀（tagPrefix）<span style="color:var(--muted)"> · 重启生效</span></label>
-              <input type="text" id="tagPrefix" placeholder="dsh-v">
+              <label data-i18n="github-tagprefix-label">版本标签前缀（tagPrefix）<span style="color:var(--muted)"> · <span data-i18n="restart-hint">重启生效</span></span></label>
+              <input type="text" id="tagPrefix" data-i18n-ph="github-tagprefix-ph" placeholder="dsh-v">
             </div>
           </div>
         </details>
@@ -205,62 +235,216 @@
 
       <!-- ── 工具链 ── -->
       <section class="panel" id="panel-tools">
-        <div class="panel-title">工具链</div>
-        <div class="panel-desc">source 通道本地构建所需。留空 = 自动发现（PATH/常见目录/corepack）。重启生效。</div>
-        <div class="field"><label>node 路径（nodePath）</label><input type="text" id="nodePath" placeholder="留空自动"></div>
-        <div class="field"><label>pnpm 路径（pnpmPath）</label><input type="text" id="pnpmPath" placeholder="留空自动"></div>
-        <div class="field"><label>git 路径（gitPath）</label><input type="text" id="gitPath" placeholder="留空自动"></div>
+        <div class="panel-title" data-i18n="tools-title">工具链</div>
+        <div class="panel-desc" data-i18n="tools-desc">source 通道本地构建所需。留空 = 自动发现（PATH/常见目录/corepack）。重启生效。</div>
+        <div class="field"><label>node 路径（nodePath）</label><input type="text" id="nodePath" data-i18n-ph="tools-auto-ph" placeholder="留空自动"></div>
+        <div class="field"><label>pnpm 路径（pnpmPath）</label><input type="text" id="pnpmPath" data-i18n-ph="tools-auto-ph" placeholder="留空自动"></div>
+        <div class="field"><label>git 路径（gitPath）</label><input type="text" id="gitPath" data-i18n-ph="tools-auto-ph" placeholder="留空自动"></div>
       </section>
 
       <!-- ── dsh 应用设置 ── -->
       <section class="panel" id="panel-dsh">
-        <div class="panel-title">dsh 应用设置</div>
-        <div class="panel-desc">壳代理 dsh 的基础设置；模型/插件/Agent 预设请在 harness 应用内设置（设置弹窗）。</div>
+        <div class="panel-title" data-i18n="dsh-title">dsh 应用设置</div>
+        <div class="panel-desc" data-i18n="dsh-desc">壳代理 dsh 的基础设置；模型/插件/Agent 预设请在 harness 应用内设置（设置弹窗）。</div>
 
         <div class="field">
-          <label>界面语言（locale.preference）</label>
+          <label data-i18n="dsh-lang-label">界面语言（locale.preference）</label>
           <div class="btn-group">
             <button id="lang-zh">中文</button><button id="lang-en">English</button>
           </div>
-          <div class="hint">写入 ~/.dsh/settings.yaml；壳菜单语言同步。</div>
+          <div class="hint" data-i18n="dsh-lang-hint">写入 ~/.dsh/settings.yaml；壳菜单、更新提示与设置窗口语言同步。</div>
         </div>
 
         <div class="field">
-          <label>dsh 配置文件</label>
+          <label data-i18n="dsh-file-label">dsh 配置文件</label>
           <div class="btn-group">
-            <button id="open-dsh-file">打开 ~/.dsh/settings.yaml</button>
+            <button id="open-dsh-file" data-i18n="dsh-file-btn">打开 ~/.dsh/settings.yaml</button>
           </div>
-          <div class="hint">模型、插件、Agent 预设等完整设置见该文件，或在应用内「设置」弹窗中操作。</div>
+          <div class="hint" data-i18n="dsh-file-hint">模型、插件、Agent 预设等完整设置见该文件，或在应用内「设置」弹窗中操作。</div>
         </div>
       </section>
 
       <!-- ── 关于 ── -->
       <section class="panel" id="panel-about">
-        <div class="panel-title">关于</div>
-        <div class="panel-desc">DeepSeek Harness 桌面版（dsh-desktop）。</div>
-        <div class="readonly-line"><b>应用版本</b><span id="appVersion">—</span></div>
-        <div class="readonly-line"><b>harness 版本</b><span id="harnessVersion">—</span></div>
-        <div class="readonly-line"><b>更新状态</b><span id="updateState">—</span></div>
-        <div class="readonly-line"><b>更新通道</b><span id="channelInfo">—</span></div>
-        <div class="readonly-line"><b>编译者</b><span>BenSon.Album</span></div>
-        <div class="readonly-line"><b>邮箱</b><span>chinasir@qq.com</span></div>
-        <div class="readonly-line"><b>仓库</b><a id="repo-link" href="#">github.com/benson-album/dsh-desktop</a></div>
+        <div class="panel-title" data-i18n="about-title">关于</div>
+        <div class="panel-desc" data-i18n="about-desc">DeepSeek Harness 桌面版（dsh-desktop）。</div>
+        <div class="readonly-line"><b data-i18n="about-app-label">应用版本</b><span id="appVersion">—</span></div>
+        <div class="readonly-line"><b data-i18n="about-harness-label">harness 版本</b><span id="harnessVersion">—</span></div>
+        <div class="readonly-line"><b data-i18n="about-state-label">更新状态</b><span id="updateState">—</span></div>
+        <div class="readonly-line"><b data-i18n="about-channel-label">更新通道</b><span id="channelInfo">—</span></div>
+        <div class="readonly-line"><b data-i18n="about-compiler-label">编译者</b><span>BenSon.Album</span></div>
+        <div class="readonly-line"><b data-i18n="about-email-label">邮箱</b><span>chinasir@qq.com</span></div>
+        <div class="readonly-line"><b data-i18n="about-repo-label">仓库</b><a id="repo-link" href="#">github.com/benson-album/dsh-desktop</a></div>
       </section>
     </main>
   </div>
 
   <footer>
-    <button id="open-settings-file">打开配置文件</button>
-    <button id="reset-defaults">重置默认</button>
+    <button id="open-settings-file" data-i18n="footer-open-file">打开配置文件</button>
+    <button id="reset-defaults" data-i18n="footer-reset">重置默认</button>
     <span class="spacer"></span>
     <span id="save-msg"></span>
-    <button id="save" class="primary">保存</button>
-    <button id="close">关闭</button>
+    <button id="save" class="primary" data-i18n="footer-save">保存</button>
+    <button id="close" data-i18n="footer-close">关闭</button>
   </footer>
 
 <script>
   const api = window.dshSettings
   let state = {}
+  let lang = 'zh'
+
+  /* ── 双语文案（语言跟随界面语言 locale.preference，与菜单一致） ── */
+  const I18N = {
+    zh: {
+      'nav-updates': '更新与升级', 'nav-paths': '目录与数据', 'nav-github': 'GitHub',
+      'nav-tools': '工具链', 'nav-dsh': 'dsh 应用设置', 'nav-about': '关于',
+      'updates-title': '更新与升级',
+      'updates-desc': '内容升级方式与检查策略。标注「重启生效」的项保存后需重启应用。',
+      'updates-source-label': '更新源（updateSource）',
+      'updates-source-release': 'release — 产物下载（推荐）',
+      'updates-source-source': 'source — 源码构建',
+      'updates-source-hint': 'release：下载打包好的 tar.gz 产物（快、无需构建环境）；source：拉源码本地 pnpm 构建。',
+      'updates-channel-label': '内容通道（channel）',
+      'updates-channel-tag': 'tag — 最新发布标签',
+      'updates-channel-master': 'master — 最新主分支',
+      'updates-channel-hint': 'source 通道：跟随最新发布标签（tag）或主分支（master）。',
+      'updates-channel-locked': 'release 通道固定跟随最新发布标签（channel 仅 source 通道可选）。',
+      'updates-autocheck-label': '自动检查更新（autoCheck）',
+      'on': '开', 'off': '关',
+      'updates-interval-label': '自动检查间隔（小时）',
+      'updates-interval-hint': '启动后 20s 首检，此后按此间隔。默认 6 小时。',
+      'adv-summary': '高级（清单与镜像）', 'adv-summary2': '高级',
+      'manifest-ph': 'https://github.com/owner/repo/releases/latest/download/latest.json',
+      'manifest-hint': '留空使用默认：https://github.com/<releaseRepo>/releases/latest/download/latest.json',
+      'mirrors-label': '下载镜像（releaseDownloadMirrors，每行一个）',
+      'mirrors-ph': 'https://ghfast.top/',
+      'mirrors-hint': 'ghproxy 风格前缀（拼在 GitHub 资产 URL 前，如 https://ghfast.top/https://github.com/…）；留空使用内置默认镜像列表。按序择优，失败自动切换；sha256 校验保证完整性。',
+      'paths-title': '目录与数据',
+      'paths-desc': '升级替换永不触碰用户数据目录。修改后需重启生效。',
+      'paths-harness-label': 'harness 目录（harnessDir）',
+      'paths-harness-ph': '/Users/you/dsh-app/harness',
+      'paths-harness-hint': '运行区：存放被升级的 harness 内容。改动后重启生效。',
+      'browse': '浏览…',
+      'paths-dshhome-label': '数据目录（DSH_HOME）',
+      'paths-dshhome-ph': '/Users/you/.dsh',
+      'paths-dshhome-hint': '用户数据：sessions / storages / profiles，升级不受影响。改动后重启生效。',
+      'paths-apphome-label': '壳数据目录',
+      'github-title': 'GitHub',
+      'github-desc': '发布仓库与版本匹配规则。',
+      'github-repo-label': '发布仓库（releaseRepo）',
+      'github-repo-ph': 'owner/repo',
+      'github-repo-hint': '承载 Releases 与 latest.json 清单的仓库。',
+      'github-remote-label': '内容通道 remote（source 通道）',
+      'github-remote-ph': 'https://github.com/deepseek-ai/deepseek-harness.git',
+      'github-pattern-label': '资产匹配模式（releaseAssetPattern）',
+      'github-tagprefix-label': '版本标签前缀（tagPrefix）',
+      'github-tagprefix-ph': 'dsh-v',
+      'tools-title': '工具链',
+      'tools-desc': 'source 通道本地构建所需。留空 = 自动发现（PATH/常见目录/corepack）。重启生效。',
+      'tools-auto-ph': '留空自动',
+      'dsh-title': 'dsh 应用设置',
+      'dsh-desc': '壳代理 dsh 的基础设置；模型/插件/Agent 预设请在 harness 应用内设置（设置弹窗）。',
+      'dsh-lang-label': '界面语言（locale.preference）',
+      'dsh-lang-hint': '写入 ~/.dsh/settings.yaml；壳菜单、更新提示与设置窗口语言同步。',
+      'dsh-file-label': 'dsh 配置文件',
+      'dsh-file-btn': '打开 ~/.dsh/settings.yaml',
+      'dsh-file-hint': '模型、插件、Agent 预设等完整设置见该文件，或在应用内「设置」弹窗中操作。',
+      'about-title': '关于',
+      'about-desc': 'DeepSeek Harness 桌面版（dsh-desktop）。',
+      'about-app-label': '应用版本', 'about-harness-label': 'harness 版本',
+      'about-state-label': '更新状态', 'about-channel-label': '更新通道',
+      'about-compiler-label': '编译者', 'about-email-label': '邮箱', 'about-repo-label': '仓库',
+      'footer-open-file': '打开配置文件', 'footer-reset': '重置默认',
+      'footer-save': '保存', 'footer-close': '关闭',
+      'restart-hint': '重启生效',
+      'msg-saved': '已保存（重启生效项请重启应用）',
+      'msg-reset': '已重置，重启应用生效',
+      'msg-lang-switched': '语言已切换（菜单/提示同步）',
+      'msg-load-fail': '加载失败: ',
+      'msg-dir-changed': '目录已变更，重启应用后生效',
+      'confirm-reset': '恢复所有设置为默认值？',
+      'browse-title': '选择目录',
+    },
+    en: {
+      'nav-updates': 'Updates', 'nav-paths': 'Paths & Data', 'nav-github': 'GitHub',
+      'nav-tools': 'Toolchain', 'nav-dsh': 'dsh Settings', 'nav-about': 'About',
+      'updates-title': 'Updates',
+      'updates-desc': 'How content updates are delivered and checked. Items marked “restart required” take effect after restarting the app.',
+      'updates-source-label': 'Update source (updateSource)',
+      'updates-source-release': 'release — download artifacts (recommended)',
+      'updates-source-source': 'source — build from source',
+      'updates-source-hint': 'release: download the packaged tar.gz (fast, no build environment needed); source: fetch the source and build locally with pnpm.',
+      'updates-channel-label': 'Content channel (channel)',
+      'updates-channel-tag': 'tag — latest release tag',
+      'updates-channel-master': 'master — latest main branch',
+      'updates-channel-hint': 'source channel: follow the latest release tag (tag) or the main branch (master).',
+      'updates-channel-locked': 'The release channel always follows the latest release tag (channel only applies to the source channel).',
+      'updates-autocheck-label': 'Auto-check for updates (autoCheck)',
+      'on': 'On', 'off': 'Off',
+      'updates-interval-label': 'Auto-check interval (hours)',
+      'updates-interval-hint': 'First check 20s after launch, then at this interval. Default 6 hours.',
+      'adv-summary': 'Advanced (manifest & mirrors)', 'adv-summary2': 'Advanced',
+      'manifest-ph': 'https://github.com/owner/repo/releases/latest/download/latest.json',
+      'manifest-hint': 'Leave empty for the default: https://github.com/<releaseRepo>/releases/latest/download/latest.json',
+      'mirrors-label': 'Download mirrors (releaseDownloadMirrors, one per line)',
+      'mirrors-ph': 'https://ghfast.top/',
+      'mirrors-hint': 'ghproxy-style prefix prepended to the GitHub asset URL, e.g. https://ghfast.top/https://github.com/…; leave empty for the built-in default mirror list. Best-first with automatic failover; sha256 verification guarantees integrity.',
+      'paths-title': 'Paths & Data',
+      'paths-desc': 'Upgrades never touch your user data directory. Changes take effect after a restart.',
+      'paths-harness-label': 'Harness directory (harnessDir)',
+      'paths-harness-ph': '/Users/you/dsh-app/harness',
+      'paths-harness-hint': 'Run area: holds the harness content being upgraded. Takes effect after restart.',
+      'browse': 'Browse…',
+      'paths-dshhome-label': 'Data directory (DSH_HOME)',
+      'paths-dshhome-ph': '/Users/you/.dsh',
+      'paths-dshhome-hint': 'User data: sessions / storages / profiles, unaffected by upgrades. Takes effect after restart.',
+      'paths-apphome-label': 'Shell data directory',
+      'github-title': 'GitHub',
+      'github-desc': 'Release repository and version-matching rules.',
+      'github-repo-label': 'Release repository (releaseRepo)',
+      'github-repo-ph': 'owner/repo',
+      'github-repo-hint': 'Repository hosting the Releases and the latest.json manifest.',
+      'github-remote-label': 'Content channel remote (source channel)',
+      'github-remote-ph': 'https://github.com/deepseek-ai/deepseek-harness.git',
+      'github-pattern-label': 'Asset pattern (releaseAssetPattern)',
+      'github-tagprefix-label': 'Version tag prefix (tagPrefix)',
+      'github-tagprefix-ph': 'dsh-v',
+      'tools-title': 'Toolchain',
+      'tools-desc': 'Required for local builds on the source channel. Leave empty for auto-discovery (PATH/common dirs/corepack). Restart required.',
+      'tools-auto-ph': 'Auto if empty',
+      'dsh-title': 'dsh Settings',
+      'dsh-desc': 'Shell-proxied dsh basics; models/plugins/agent presets live in the in-app settings dialog.',
+      'dsh-lang-label': 'UI language (locale.preference)',
+      'dsh-lang-hint': 'Written to ~/.dsh/settings.yaml; menus, update toast and this window follow.',
+      'dsh-file-label': 'dsh config file',
+      'dsh-file-btn': 'Open ~/.dsh/settings.yaml',
+      'dsh-file-hint': 'Full settings (models, plugins, agent presets) live in that file or in the in-app settings dialog.',
+      'about-title': 'About',
+      'about-desc': 'DeepSeek Harness desktop shell (dsh-desktop).',
+      'about-app-label': 'App version', 'about-harness-label': 'Harness version',
+      'about-state-label': 'Update state', 'about-channel-label': 'Update channel',
+      'about-compiler-label': 'Compiler', 'about-email-label': 'Email', 'about-repo-label': 'Repository',
+      'footer-open-file': 'Open config file', 'footer-reset': 'Reset defaults',
+      'footer-save': 'Save', 'footer-close': 'Close',
+      'restart-hint': 'restart required',
+      'msg-saved': 'Saved (restart-required items take effect after restarting)',
+      'msg-reset': 'Reset. Restart the app to apply.',
+      'msg-lang-switched': 'Language switched (menus/toast follow)',
+      'msg-load-fail': 'Failed to load: ',
+      'msg-dir-changed': 'Directory changed; takes effect after restart',
+      'confirm-reset': 'Restore all settings to defaults?',
+      'browse-title': 'Choose Directory',
+    },
+  }
+
+  function t(key) { return (I18N[lang] && I18N[lang][key]) ?? I18N.zh[key] ?? key }
+
+  /** Apply the current language to every [data-i18n] / [data-i18n-ph] element. */
+  function applyI18n() {
+    document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n) })
+    document.querySelectorAll('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh) })
+    document.title = t('nav-about') + ' — dsh-desktop'
+  }
 
   // ── 导航切换 ──
   document.querySelectorAll('.nav-item').forEach((item) => {
@@ -272,11 +456,41 @@
     })
   })
 
+  // ── 更新源 ↔ 通道联动：release 时通道固定为 tag ──
+  function syncChannelLinkage() {
+    const source = document.getElementById('updateSource').value
+    const channel = document.getElementById('channel')
+    const hint = document.getElementById('channel-hint')
+    if (source === 'release') {
+      channel.value = 'tag'
+      channel.disabled = true
+      hint.textContent = t('updates-channel-locked')
+    } else {
+      channel.disabled = false
+      hint.textContent = t('updates-channel-hint')
+    }
+  }
+  document.getElementById('updateSource').addEventListener('change', syncChannelLinkage)
+
+  // ── 目录选择器 ──
+  async function browseInto(inputId) {
+    const picked = await api.browseDir()
+    if (picked !== null) {
+      document.getElementById(inputId).value = picked
+      msg(t('msg-dir-changed'))
+    }
+  }
+  document.getElementById('browse-harnessDir').addEventListener('click', () => void browseInto('harnessDir'))
+  document.getElementById('browse-dshHome').addEventListener('click', () => void browseInto('dshHome'))
+
   // ── 表单 ← 配置 ──
   function fill(s) {
     state = s
+    lang = (s.locale ?? 'zh') === 'en' ? 'en' : 'zh'
+    applyI18n()
     setSelect('updateSource', s.updateSource)
     setSelect('channel', s.channel)
+    syncChannelLinkage()
     setBtn('autoCheck', s.autoCheck === true || s.autoCheck === undefined ? 'on' : 'off')
     val('autoCheckIntervalMs', (s.autoCheckIntervalMs ?? 6 * 3600_000) / 3600_000)
     val('releaseManifestUrl', s.releaseManifestUrl ?? '')
@@ -290,7 +504,7 @@
     val('nodePath', s.nodePath ?? '')
     val('pnpmPath', s.pnpmPath ?? '')
     val('gitPath', s.gitPath ?? '')
-    setBtn('lang', (s.locale ?? 'zh') === 'en' ? 'en' : 'zh')
+    setBtn('lang', lang)
     text('appHome', s.appHome ?? '—')
     text('appVersion', s.appVersion ?? '—')
     text('harnessVersion', s.harnessVersion ?? '—')
@@ -307,14 +521,15 @@
     })
   }
 
-  // ── 收集表单 → patch ──
+  // ── 收集表单 → patch（release 下强制 channel=tag） ──
   function collect() {
     const mirrors = document.getElementById('releaseDownloadMirrors').value
       .split('\n').map((s) => s.trim()).filter(Boolean)
     const intervalH = Number(document.getElementById('autoCheckIntervalMs').value)
+    const updateSource = document.getElementById('updateSource').value
     return {
-      updateSource: document.getElementById('updateSource').value,
-      channel: document.getElementById('channel').value,
+      updateSource,
+      channel: updateSource === 'release' ? 'tag' : document.getElementById('channel').value,
       autoCheck: document.getElementById('autoCheck-on').classList.contains('on'),
       autoCheckIntervalMs: Number.isFinite(intervalH) && intervalH > 0 ? intervalH * 3600_000 : 6 * 3600_000,
       releaseManifestUrl: document.getElementById('releaseManifestUrl').value.trim() || undefined,
@@ -334,15 +549,25 @@
   // ── 事件 ──
   document.getElementById('autoCheck-on').addEventListener('click', () => setBtn('autoCheck', 'on'))
   document.getElementById('autoCheck-off').addEventListener('click', () => setBtn('autoCheck', 'off'))
-  document.getElementById('lang-zh').addEventListener('click', async () => { setBtn('lang', 'zh'); await api.save({ locale: 'zh' }); msg('语言已切换（菜单同步）') })
-  document.getElementById('lang-en').addEventListener('click', async () => { setBtn('lang', 'en'); await api.save({ locale: 'en' }); msg('Language switched (menu syncs)') })
+  document.getElementById('lang-zh').addEventListener('click', async () => {
+    setBtn('lang', 'zh')
+    await api.save({ locale: 'zh' })
+    msg(t('msg-lang-switched'))
+    await reload()
+  })
+  document.getElementById('lang-en').addEventListener('click', async () => {
+    setBtn('lang', 'en')
+    await api.save({ locale: 'en' })
+    msg(t('msg-lang-switched'))
+    await reload()
+  })
   document.getElementById('open-settings-file').addEventListener('click', () => api.openSettingsFile())
   document.getElementById('open-dsh-file').addEventListener('click', () => api.openDshSettingsFile())
   document.getElementById('repo-link').addEventListener('click', (e) => { e.preventDefault(); api.openRepo() })
   document.getElementById('reset-defaults').addEventListener('click', async () => {
-    if (confirm('恢复所有设置为默认值？')) {
+    if (confirm(t('confirm-reset'))) {
       await api.save({ reset: true })
-      msg('已重置，重启应用生效')
+      msg(t('msg-reset'))
       await reload()
     }
   })
@@ -350,17 +575,17 @@
   document.getElementById('save').addEventListener('click', async () => {
     const patch = collect()
     await api.save(patch)
-    msg('已保存（重启生效项请重启应用）')
+    msg(t('msg-saved'))
   })
 
   async function reload() { fill(await api.get()) }
-  function msg(t) {
+  function msg(txt) {
     const el = document.getElementById('save-msg')
-    el.textContent = t
+    el.textContent = txt
     setTimeout(() => { el.textContent = '' }, 3000)
   }
 
-  reload().catch((e) => msg('加载失败: ' + e.message))
+  reload().catch((e) => msg(t('msg-load-fail') + e.message))
 </script>
 </body>
 </html>

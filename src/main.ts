@@ -156,8 +156,10 @@ async function startBackend(): Promise<string> {
   const logStream = createWriteStream(backendLogPath, { flags: 'a' })
 
   const nodeTool = resolveNode(settings, process.env)
-  log(`[backend] starting: ${nodeTool.bin} ${bin} --profile web --port ${settings.backendPort} (cwd=${settings.harnessDir})`)
-  const child = spawn(nodeTool.bin, [...nodeTool.prefix, bin, '--profile', 'web', '--port', String(settings.backendPort)], {
+  // --no-open：harness web 默认会在系统浏览器打开页面；壳自己用 BrowserWindow
+  // 承载 GUI，必须禁掉（否则每次启动浏览器也弹一份）
+  log(`[backend] starting: ${nodeTool.bin} ${bin} --profile web --port ${settings.backendPort} --no-open (cwd=${settings.harnessDir})`)
+  const child = spawn(nodeTool.bin, [...nodeTool.prefix, bin, '--profile', 'web', '--port', String(settings.backendPort), '--no-open'], {
     cwd: settings.harnessDir,
     env: backendEnv(),
     stdio: ['ignore', 'pipe', 'pipe'],

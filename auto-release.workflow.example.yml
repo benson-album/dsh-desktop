@@ -200,5 +200,18 @@ jobs:
           test -f latest.json
           gh release upload "${{ steps.collect.outputs.tag }}" latest.json \
             --repo "${{ github.repository }}" --clobber
-          echo "latest.json 已更新（含全部平台资产）"
+          # 同步到仓库 main 分支：设备端从 raw.githubusercontent 读清单，
+          # 不依赖 releases/latest（壳 release 会遮蔽内容 release，见技术文档 §5）
+          SHA="$(gh api "repos/${GITHUB_REPOSITORY}/contents/latest.json" --jq .sha 2>/dev/null || true)"
+          CONTENT="$(base64 < latest.json | tr -d '\n')"
+          if [[ -n "${SHA}" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/contents/latest.json" -X PUT \
+              -f message="chore: sync latest.json (${{ steps.collect.outputs.tag }})" \
+              -f content="${CONTENT}" -f sha="${SHA}" >/dev/null
+          else
+            gh api "repos/${GITHUB_REPOSITORY}/contents/latest.json" -X PUT \
+              -f message="chore: sync latest.json (${{ steps.collect.outputs.tag }})" \
+              -f content="${CONTENT}" >/dev/null
+          fi
+          echo "latest.json 已更新（Release 资产 + 仓库 main）"
         shell: bash

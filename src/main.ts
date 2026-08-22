@@ -677,9 +677,12 @@ function openSettingsWindow(): void {
     return
   }
   settingsWindow = new BrowserWindow({
-    width: 480,
+    width: 640,
     height: 600,
     title: '应用设置',
+    // 沉浸式无边框，与主窗口一致（红绿灯保留，页面顶部让出拖拽区）
+    titleBarStyle: 'hidden',
+    trafficLightPosition: { x: 16, y: 14 },
     resizable: true,
     minimizable: false,
     maximizable: false,
@@ -933,15 +936,15 @@ function buildMenu(): void {
         },
         { type: 'separator' },
         {
+          label: T.settings,
+          accelerator: 'CmdOrCtrl+,',
+          click: () => openSettingsWindow(),
+        },
+        {
           label: T.checkUpdates,
           accelerator: 'CmdOrCtrl+U',
           enabled: !updateBusy,
           click: () => void runUpdateCheck(true),
-        },
-        {
-          label: T.settings,
-          accelerator: 'CmdOrCtrl+,',
-          click: () => openSettingsWindow(),
         },
         {
           label: T.restartBackend,

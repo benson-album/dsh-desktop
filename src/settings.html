@@ -25,6 +25,12 @@
     display: flex; flex-direction: column; overflow: hidden;
   }
   .app { display: flex; flex: 1; min-height: 0; }
+  /* 沉浸式无边框：顶部让出红绿灯 + 拖拽区 */
+  .drag-strip {
+    position: fixed; top: 0; left: 0; right: 0; height: 36px;
+    -webkit-app-region: drag; z-index: 100;
+  }
+  nav { margin-top: 34px; }
 
   /* ── 左侧导航（参考 dsh 设置弹窗） ── */
   nav {
@@ -86,6 +92,7 @@
 </style>
 </head>
 <body>
+  <div class="drag-strip"></div>
   <div class="app">
     <nav id="nav">
       <div class="nav-item active" data-panel="updates"><span class="ico">⟳</span>更新与升级</div>

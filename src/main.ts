@@ -57,6 +57,9 @@ function defaultSettings(): AppSettings {
     updateSource: 'release',
     releaseRepo: DEFAULT_RELEASE_REPO,
     releaseAssetPattern: 'DeepSeek-Harness-*-<os>-<arch>.tar.gz',
+    // 下载镜像留空 → 使用内置默认列表（ghfast.top 等）；settings.json 可配置
+    // releaseDownloadMirrors 覆盖（ghproxy 风格前缀）。
+    releaseDownloadMirrors: undefined,
     autoCheck: true,
     autoCheckIntervalMs: 6 * 3600_000,
     backendPort: 0,

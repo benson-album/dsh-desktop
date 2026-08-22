@@ -398,3 +398,58 @@ test('produceUpdate: source channel still dispatches to buildUpdate', async () =
   fs.rmSync(TMP, { recursive: true, force: true })
   process.exit(failed === 0 ? 0 : 1)
 })()
+
+/* ── 8. mirror failover / best-first download ───────────────────────────────── */
+
+test('downloadAssetSmart: failover across mirrors + remembers best', async () => {
+  const http = require('node:http')
+  const payload = Buffer.from('hello-mirror-content')
+  const server = http.createServer((req, res) => {
+    const u = req.url || ''
+    if (u.startsWith('/direct')) { res.writeHead(404); res.end('nf'); return }
+    if (u.startsWith('/mirror1/')) { res.writeHead(404); res.end('nf1'); return }
+    if (u.startsWith('/mirror2/')) { res.writeHead(200); res.end(payload); return }
+    res.writeHead(404); res.end('unknown')
+  })
+  await new Promise((r) => server.listen(0, '127.0.0.1', r))
+  const port = server.address().port
+  const settings = {
+    harnessDir: TMP, channel: 'tag', tagPrefix: 'dsh-v', remote: 'x', updateSource: 'release',
+    releaseRepo: 'a/b',
+    releaseDownloadMirrors: [
+      `http://127.0.0.1:${port}/mirror1/`,
+      `http://127.0.0.1:${port}/mirror2/`,
+    ],
+  }
+  const url = `http://127.0.0.1:${port}/direct/file.bin`
+  const dest = path.join(TMP, 'mirror-out.bin')
+  const logs = []
+  const events = { phase: () => {}, log: (l) => logs.push(l), progress: () => {} }
+  try {
+    const r1 = await U.downloadAssetSmart(settings, url, dest, events)
+    assert.strictEqual(r1.ok, true)
+    assert.strictEqual(fs.readFileSync(dest).toString(), 'hello-mirror-content')
+    assert.ok(logs.some((l) => l.includes('mirror2')), '应回退到 mirror2')
+    // 第二次：记忆 mirror2 优先
+    logs.length = 0
+    const r2 = await U.downloadAssetSmart(settings, url, dest, events)
+    assert.strictEqual(r2.ok, true)
+    assert.ok(logs.filter((l) => l.includes('尝试'))[0].includes('mirror2'), '第二次应优先 mirror2')
+  } finally { server.close() }
+})
+
+test('downloadAssetSmart: all candidates fail -> error', async () => {
+  const http = require('node:http')
+  const server = http.createServer((_req, res) => { res.writeHead(404); res.end('nf') })
+  await new Promise((r) => server.listen(0, '127.0.0.1', r))
+  const port = server.address().port
+  const settings = {
+    harnessDir: TMP, channel: 'tag', tagPrefix: 'dsh-v', remote: 'x', updateSource: 'release',
+    releaseRepo: 'a/b',
+    releaseDownloadMirrors: [`http://127.0.0.1:${port}/m/`],
+  }
+  try {
+    const r = await U.downloadAssetSmart(settings, `http://127.0.0.1:${port}/d.bin`, path.join(TMP, 'x.bin'), { phase: () => {}, log: () => {}, progress: () => {} })
+    assert.strictEqual(r.ok, false)
+  } finally { server.close() }
+})

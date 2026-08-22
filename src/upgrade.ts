@@ -56,6 +56,15 @@ export interface UpgradeSettings {
   releaseAssetPattern: string
   /** Explicit manifest URL override (e.g. a mirror); defaults to GitHub `releases/latest/download/latest.json`. */
   releaseManifestUrl?: string
+  /**
+   * Download mirrors for the artifact, ghproxy-style: each entry is a PREFIX that
+   * is prepended to the full GitHub asset URL, e.g. `https://ghfast.top/` turns
+   * `https://github.com/…` into `https://ghfast.top/https://github.com/…`.
+   * The downloader tries candidates in "best-first" order with automatic
+   * failover (see downloadAssetSmart); sha256 verification guarantees integrity
+   * regardless of which mirror served the bytes.
+   */
+  releaseDownloadMirrors?: string[]
 }
 
 /** Progress events streamed to the progress window / toast. */
@@ -822,9 +831,9 @@ export async function produceUpdate(
   try { rmSync(tagDir, { recursive: true, force: true }) } catch { /* best effort */ }
   try { mkdirSync(tagDir, { recursive: true }) } catch { /* best effort */ }
 
-  // 1. download (.part → rename)
+  // 1. download with mirror failover (.part → rename)
   events.phase('downloading', target.assetUrl)
-  const dl = await downloadAsset(target.assetUrl, zipPath, events, signal)
+  const dl = await downloadAssetSmart(settings, target.assetUrl, zipPath, events, signal)
   if (!dl.ok) {
     if (dl.cancelled) return { status: 'cancelled' }
     cleanupDownloads()
@@ -855,6 +864,75 @@ export async function produceUpdate(
   }
   cleanupDownloads()
   return { status: 'ready', from: target.from, to: target.to, tag: target.tag }
+}
+
+/** Default ghproxy-style mirrors (CN-friendly) used when settings don't specify any. */
+const DEFAULT_DOWNLOAD_MIRRORS: readonly string[] = [
+  'https://ghfast.top/',
+  'https://gh-proxy.com/',
+  'https://github.moeyy.xyz/',
+]
+
+/** Mirrors configured in settings, or the built-in defaults. */
+function downloadMirrors(settings: UpgradeSettings): readonly string[] {
+  if (settings.releaseDownloadMirrors !== undefined && settings.releaseDownloadMirrors.length > 0) {
+    return settings.releaseDownloadMirrors
+  }
+  return DEFAULT_DOWNLOAD_MIRRORS
+}
+
+/**
+ * Session memory of the mirror that last succeeded, so subsequent downloads
+ * try the proven-fast path first ("best-first" order):
+ *   [last-good mirror (if any)] → [direct github.com] → [other mirrors]
+ * The direct URL is always kept in the rotation as the integrity/fallback
+ * baseline; sha256 verification happens after the download either way.
+ */
+let lastGoodMirror: string | null = null
+
+function downloadCandidates(settings: UpgradeSettings, baseUrl: string): string[] {
+  const mirrors = downloadMirrors(settings)
+  const direct: string = baseUrl
+  const prefixed = (m: string): string => `${m}${baseUrl}`
+  const ordered: string[] = []
+  if (lastGoodMirror !== null) ordered.push(prefixed(lastGoodMirror))
+  ordered.push(direct)
+  for (const m of mirrors) {
+    const p = prefixed(m)
+    if (!ordered.includes(p)) ordered.push(p)
+  }
+  return ordered
+}
+
+/**
+ * Download with mirror failover: try each candidate (last-good mirror first,
+ * then direct GitHub, then the rest) until one completes; remember the winner
+ * for the next download. Every path still lands in `.part → rename`, and the
+ * caller verifies size+sha256 afterwards, so a compromised mirror cannot
+ * inject bad bytes undetected.
+ */
+export async function downloadAssetSmart(
+  settings: UpgradeSettings,
+  url: string,
+  destZip: string,
+  events: UpgradeEvents,
+  signal?: AbortSignal,
+): Promise<{ ok: true } | { ok: false; message: string; cancelled: boolean }> {
+  const candidates = downloadCandidates(settings, url)
+  let last: { ok: false; message: string; cancelled: boolean } | null = null
+  for (const cand of candidates) {
+    if (signal?.aborted) return { ok: false, message: 'cancelled', cancelled: true }
+    events.log(`[download] 尝试: ${cand === url ? '直达 github.com' : cand}`)
+    const r = await downloadAsset(cand, destZip, events, signal)
+    if (r.ok) {
+      if (cand !== url) lastGoodMirror = cand.slice(0, cand.length - url.length)
+      return r
+    }
+    last = r
+    if (r.cancelled) return r
+    events.log(`[download] ${cand === url ? '直达' : '镜像'}失败: ${r.message.slice(-200)}`)
+  }
+  return { ok: false, message: last?.message ?? 'all download candidates failed', cancelled: false }
 }
 
 /** Stream-download a URL to destZip via a `.part` temp file (redirect-following, abortable). */

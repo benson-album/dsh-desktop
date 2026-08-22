@@ -62,6 +62,26 @@ bash scripts/publish-release.sh <version> [--repo owner/repo] [--dry-run]
 
 ### 3.2 自动发布流水线（上游同步 + 自动打包上传）
 
+```
+上游 dsh-v* tag（ls-remote 版本排序，含 rc）
+  │ cron 每 6h / workflow_dispatch（force 重发）
+  ▼
+┌─ auto-release（release job，矩阵 4 平台）────────────────┐
+│ 1. 解析上游最新 tag → 幂等判断（本仓库已发布则跳过）         │
+│ 2. clone 上游源码（--depth 1 --branch <tag>）              │
+│ 3. 构建（pnpm install + build，注入 DSH_CLIENT_COMMIT_HASH）│
+│ 4. publish-release.sh --dry-run：tar.gz + 平台清单片段      │
+│ 5. 上传资产（显式路径，create||true + upload --clobber）    │
+└──────────────────────────────────────────────────────────┘
+  │ 所有平台完成
+  ▼
+finalize（ubuntu）：拉取全部 latest-<os>-<arch>.json 片段
+  → 合并成 latest.json → 上传 Release 资产
+  → 同步仓库 main（设备端 raw/jsDelivr 读取源）
+```
+
+### 3.2 自动发布流水线（上游同步 + 自动打包上传）
+
 **目标**：`deepseek-ai/deepseek-harness` 上游发布新版（`dsh-v*` tag）后，无需人工干预，自动构建产物并发布到本仓库 Releases；设备端检测逻辑不变（只看本仓库 Release）。
 
 **触发与调度**：
@@ -136,6 +156,14 @@ bash scripts/publish-release.sh <version> [--repo owner/repo] [--dry-run]
 - 备选：electron-builder 生态的 `latest-mac.yml`（`generateUpdatesFilesForAllChannels`），字段语义等价，但绑定 electron-updater 工具链；**本期采用自研 `latest.json`**，`latest-mac.yml` 记录为备选（决策点见 PRD §6）。
 
 ---
+
+## 设备端升级链路（release 通道，§5~§7 总览）
+
+```
+清单（jsDelivr / raw main）──► 检测 ──► 下载 ──► 校验 ──► 解压 ──► 就绪 ──► 替换 ──► 重启
+   §5 检测            §5   §6 下载   §6 校验   §6 解压   §4/6.6   §7         §7
+   os+arch 匹配      版本对比 镜像择优  sha256    候选区    toast    原子替换   生效
+```
 
 ## 5. 检测（checking，产物通道）
 

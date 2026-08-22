@@ -64,6 +64,21 @@ linux:
 
 ---
 
+## 壳发布全流程（§4+§5 总览）
+
+```
+发布者（本地）                          GitHub（云端）
+  bash scripts/publish-shell.sh <ver>
+    ├─ electron-builder --mac --x64 ──► dsh-desktop-mac-x64-<ver>.zip
+    ├─ electron-builder --mac --arm64 ► dsh-desktop-mac-arm64-<ver>.zip
+    └─ gh release create dsh-desktop-v<ver>
+          └─ 推送 tag ─────────────────► build-shell（tag 自动触发）
+                                          ├─ windows-latest ──► dsh-desktop-win-x64-<ver>.zip
+                                          └─ ubuntu-latest  ──► dsh-desktop-linux-x64-<ver>.AppImage
+                                        上传到同一 Release
+设备端：⌘U 检测 ──► 对比 dsh-desktop-v* tag 与本地版本 ──► 弹窗跳转下载页
+```
+
 ## 4. scripts/publish-shell.sh（本地打 mac 壳）
 
 ```
@@ -87,8 +102,8 @@ linux:
 ## 5. .github/workflows/build-shell.yml（win/linux 壳 CI）
 
 ```
-触发：workflow_dispatch（手动，带 version 输入）
-     （后续可选：打 dsh-desktop-v* tag 时自动触发）
+触发：push dsh-desktop-v* tag（自动，version 从 GITHUB_REF_NAME 提取）
+     + workflow_dispatch（手动，带 version 输入）
 
 jobs:
   shell:

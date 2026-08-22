@@ -33,6 +33,26 @@
 - **底部**：「打开配置文件」（shell 打开 settings.json）「关闭」
 - 配色跟随系统（CSS `prefers-color-scheme`），字体/圆角与 dsh 接近（12-13px 系统字体、8-10px 圆角）
 
+## 设置窗口交互流程
+
+```
+菜单「应用设置…」（⌘,）
+  ▼
+openSettingsWindow（沉浸式无边框 640×600，顶部拖拽区 + 红绿灯）
+  ▼
+settings.html 加载 → dshSettings.get()（IPC 'dsh:settings-get'）
+  ▼
+左侧分类导航（更新与升级 / 目录与数据 / GitHub / 工具链 / dsh 应用设置 / 关于）
+  ▼ 用户修改控件
+[保存] → dshSettings.save(patch) → 'dsh:settings-save'
+          ├─ 合并写 settings.json（原子：tmp + rename，undefined 删键）
+          ├─ 即时应用：autoCheck/间隔（重调度器）、语言（写 settings.yaml + buildMenu）
+          └─ 提示"已保存（重启生效项请重启应用）"
+[打开配置文件] → shell 打开 ~/dsh-app/settings.json
+[dsh 语言切换] → 写 ~/.dsh/settings.yaml locale.preference → 壳菜单立即联动
+[关于] → 只读：版本 / harness / 更新状态 / 编译者 / 邮箱 / 仓库链接
+```
+
 ## 3. 可配置项（分类归纳）
 
 | 分类 | 字段 | 控件 | 生效 |

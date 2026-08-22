@@ -143,8 +143,9 @@ bash scripts/publish-release.sh <version> [--repo owner/repo] [--dry-run]
 - 产物通道流程：
 
 ```
-GET https://api.github.com/repos/<owner>/<repo>/releases/latest
-  （或直接 GET 清单 raw URL：https://raw.githubusercontent.com/<owner>/<repo>/<branch>/latest.json）
+GET 清单（默认 https://raw.githubusercontent.com/<owner>/<repo>/main/latest.json）
+  （发布流程把合并清单同步到仓库 main 分支；不依赖 releases/latest——
+   壳 release dsh-desktop-v* 比内容 release 新时会遮蔽 releases/latest 导致 404）
 → 解析 tag（latest.json.version）
 → 从 assets[] 中按本机 `process.platform + process.arch` 匹配条目（os/arch 精确匹配；规则见 §13）
    ├─ 无匹配 → 视为"无本平台产物"（提示而非报错，静默待下次）
@@ -232,7 +233,7 @@ export interface UpgradeSettings {
 | `updateSource` | `release` | 产物下载（默认）或源码构建 |
 | `releaseRepo` | `deepseek-ai/deepseek-harness` | Releases 所在 owner/repo |
 | `releaseAssetPattern` | `DeepSeek-Harness-*-mac-x64.tar.gz` | 产物匹配模式（多平台扩展后为 `DeepSeek-Harness-*-<os>-<arch>.tar.gz`，见 §13） |
-| `releaseManifestUrl` | 空（自动推导） | 显式清单 URL 覆盖 |
+| `releaseManifestUrl` | 空（自动推导） | 显式清单 URL 覆盖；默认 `raw.githubusercontent.com/<repo>/main/latest.json`（不依赖 releases/latest，避免被壳 release 遮蔽） |
 
 - 通道分支：`checkForUpdates` / `produceCandidate`（原 `buildUpdate` 改为通用命名）按 `updateSource` 分派——`release` → §5+§6；`source` → 现有 `git fetch + git archive + pnpm build` 全链路。
 - 状态机新增状态常量：`'downloading' | 'extracting'`；`BuildResult` 扩展为 `ProduceResult`（语义不变，产物通道下 `to` 字段为版本号）。

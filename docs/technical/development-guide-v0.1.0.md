@@ -165,7 +165,8 @@ latest.json → 创建本仓库 Release（资产先、清单后）。手动触�
 1. `pnpm test:release`（单元测试全绿）
 2. `bash scripts/publish-release.sh <version> --dry-run`（本地产出 tar.gz + latest.json 并核对清单）
 3. 真实发布：`DSH_RELEASE_REF=<已构建 checkout> bash scripts/publish-release.sh <version>`
-4. 自动流水线兜底：`.github/workflows/auto-release.yml` 每 6h 检测上游新版自动打包上传（设备端零操作）
+4. 发布后 latest.json 自动同步到仓库 main（设备端清单 URL 指向 raw main；勿依赖 releases/latest，壳 release 会遮蔽）
+5. 自动流水线兜底：`.github/workflows/auto-release.yml` 每 6h 检测上游新版自动打包上传（设备端零操作）
 
 **壳包发布（v0.3.0，与内容包隔离）**：
 

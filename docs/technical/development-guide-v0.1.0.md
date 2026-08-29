@@ -128,6 +128,7 @@ latest.json → 创建本仓库 Release（资产先、清单后）。手动触�
 | K-16 | 检查更新报 `failed: https://github.com/<repo>/releases/latest/download/latest.json: HTTP 404` | 默认 `updateSource: 'release'` 从 GitHub Releases 下载清单，但目标仓库未发布含 `latest.json` 的 release（或 releaseRepo 配错），404 必然复现 | 发布资产未就绪时在 `settings.json` 写 `"updateSource": "source"` 切回 git 源码构建式（K-14 路径，立即可用）；要走 release 通道则先发布 `latest.json` + 平台 tar.gz 资产 | `checkForUpdates` 返回 up-to-date / update-available，不再 404 |
 | K-17 | 发布脚本打包产物时 `zip` 长时间卡死（node_modules 数十万小文件 + pnpm 符号链接） | macOS 自带 zip 对海量小文件逐文件压缩，1.4G stage 数十分钟无进展（默认与 -1 级别均不可行） | 产物格式定为 **tar.gz**：`tar -czf` 约 1-2 分钟完成且保留符号链接；设备端 `tar -xzf` 在 darwin/win32（bsdtar）与 linux（gnu tar）均原生支持，无 unzip 依赖 | `publish-release.sh --dry-run` 约 80s 完成；`extractAsset` 三平台语义一致 |
 | K-18 | 壳层 UI 与内置设置不一致：toast/设置窗口硬编码中文、toast 硬编码深色（浅色主题突兀）、设置文案与实现不符（jsDelivr/zip 表述）、更新源与通道不联动、harnessDir/DSH_HOME 只能手输 | 壳层注入 UI 硬编码样式与文案；settings 字段缺 UI 联动与目录选择器 | toast 改用 harness 设计令牌 `--dsw-alias-*`（带 fallback，跟随浅/深色主题）；toast 与设置窗口文案跟随界面语言（`locale.preference`）；设置窗口全量双语（`I18N` + `data-i18n`）；更新源↔通道联动（release 时 channel 固定 tag 并禁用）；harnessDir/DSH_HOME 加"浏览…"（原生目录选择器）；文案纠错（默认清单 URL 为 GitHub Releases、资产为 tar.gz，见 K-17） | 界面切 English 后 toast/设置窗口为英文；浅色主题下 toast 跟随令牌；release 下 channel 禁用且保存强制 tag |
+| K-19 | 打开历史会话报 `corrupt session log: seq gap in committed region at line N (expected X, got X-1)` | harness 会话日志（`~/.dsh/sessions/<project>/<session-id>/session.jsonl.zstd`）中某事件行 seq 与上一行重复（实例：`agent/inbox/spliced` 与 `session/end-seed` 同为 317634），之后所有事件全局 seq 少 1，`scanLog` 校验失败 | 数据修复（不丢事件）：zstd CLI 解压 → 重复行起所有 `"seq":N`/`"seq0":N` +1（chunks 行展开 `seq=seq0+k` 同步）→ 用官方 `decodeStorageRecord` 展开验证 seq 0..N-1 连续 → 以 harness 相同参数（Node zlib checksumFlag=1）重压写回（原文件备份 `.bak`） | `loadStored`/官方 decodeStorageRecord 展开 411181 事件连续；应用内重新打开会话成功 |
 
 ## 7. 关键设计约束（改代码前先理解，勿破坏）
 
@@ -201,3 +202,4 @@ latest.json → 创建本仓库 Release（资产先、清单后）。手动触�
 | v0.1 | 2026-08-20 | 修订⑦：release 通道 404 排查入档（K-16）；settings.json 支持 `updateSource`/`releaseRepo`/`releaseAssetPattern` |
 | v0.1 | 2026-08-20 | 修订⑧：产物下载式升级实施落地——`pnpm test:release` 单测、`scripts/publish-release.sh` 发布脚本、`.github/workflows/auto-release.yml` 自动流水线；产物格式定 tar.gz（K-17：zip 打包在海量小文件下不可行） |
 | v0.1 | 2026-08-20 | 修订⑨：壳层 UI 对齐内置设置——更新源↔通道联动（release 固定 tag）、harnessDir/DSH_HOME 目录选择器、toast 改用设计令牌+双语、设置窗口全量双语与文案纠错（K-18） |
+| v0.1 | 2026-08-22 | 修订⑩：历史会话日志 seq 重复损坏的手工修复方法入档（K-19，数据侧修复，不丢事件） |

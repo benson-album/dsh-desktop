@@ -49,6 +49,7 @@
 | [PRD-DSH-desktop-shell-v0.1.0.md](./prd/PRD-DSH-desktop-shell-v0.1.0.md) | 产品需求：背景/目标/用户场景/FR-D1~D7/NFR/架构/验收/风险/路线图/变更记录 |
 | [PRD-DSH-release-download-upgrade-v0.2.0.md](./prd/PRD-DSH-release-download-upgrade-v0.2.0.md) | 产品需求（✅ 已确认 2026-08-20）：产物下载式自动升级——发布者打包上传 GitHub Releases，app 下载产物升级；源码构建式保留为可选通道 |
 | [PRD-DSH-shell-release-v0.3.0.md](./prd/PRD-DSH-shell-release-v0.3.0.md) | 产品需求（✅ 已确认 2026-08-21）：壳包发布专项——壳与内容包分离发布，mac 本地双架构 + win/linux CI 打包 |
+| [PRD-DSH-cloud-sync-v0.5.0.md](./prd/PRD-DSH-cloud-sync-v0.5.0.md) | 产品需求（📋 草案待评审 2026-08-24）：本地会话与项目云端同步——会话帧级增量同步 + workspace 同步 + 加密 + GitHub 私有仓库载体 |
 
 ## 技术文档（Technical）
 
@@ -58,6 +59,7 @@
 | [dsh-release-download-upgrade-v0.2.0.md](./technical/dsh-release-download-upgrade-v0.2.0.md) | 技术方案（✅ 已确认 2026-08-20）：产物下载式升级——发布脚本/更新清单/检测下载校验解压/替换回滚复用/通道抽象/自动发布流水线/多架构跨平台预留 |
 | [dsh-shell-release-v0.3.0.md](./technical/dsh-shell-release-v0.3.0.md) | 技术方案（✅ 已确认 2026-08-21）：壳包发布——publish-shell.sh/electron-builder win+linux/build-shell CI/安装指引 |
 | [dsh-settings-page-v0.4.0.md](./technical/dsh-settings-page-v0.4.0.md) | 技术方案（✅ 已确认 2026-08-22）：应用设置页——菜单 ⌘,、分类配置（更新/目录/GitHub/工具链/dsh 语言/关于）、参考 dsh 设置弹窗样式、沉浸式窗口 |
+| [dsh-cloud-sync-v0.5.0.md](./technical/dsh-cloud-sync-v0.5.0.md) | 技术方案（📋 草案待评审 2026-08-24）：会话与项目云端同步——帧级增量协议、AES-GCM 按帧加密、workspace LWW + 路径映射、GitHub Provider、壳层 sync 模块 |
 | [development-guide-v0.1.0.md](./technical/development-guide-v0.1.0.md) | **开发指南**：环境要求/构建打包命令/测试方法/架构速览/**18 条已知坑位与修复记录（K-1~K-18）**/10 条设计约束/发布节奏约定/发布流程 |
 
 ## 阅读顺序（第三方开发者）

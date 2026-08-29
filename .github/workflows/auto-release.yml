@@ -16,13 +16,17 @@ name: auto-release
 
 on:
   schedule:
-    - cron: '0 */6 * * *'          # 每 6 小时；上游发版后最多一个周期内就绪
+    - cron: '0 4 * * *'            # 每天凌晨 4 点一次（上游发版频率低，减少排队堆积）
   workflow_dispatch:
     inputs:
       force:
         description: '强制重新构建并覆盖已发布的 tag'
         type: boolean
         default: false
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: true
 
 permissions:
   contents: write

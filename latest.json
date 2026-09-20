@@ -1,22 +1,22 @@
 {
   "schemaVersion": 1,
-  "version": "0.1.6-alpha.1",
-  "tag": "dsh-v0.1.6-alpha.1",
-  "publishedAt": "2026-09-15T09:25:59Z",
+  "version": "0.1.6-alpha.2",
+  "tag": "dsh-v0.1.6-alpha.2",
+  "publishedAt": "2026-09-18T09:03:24Z",
   "assets": [
     {
-      "name": "DeepSeek-Harness-0.1.6-alpha.1-darwin-arm64.tar.gz",
-      "url": "https://github.com/benson-album/dsh-desktop/releases/download/dsh-v0.1.6-alpha.1/DeepSeek-Harness-0.1.6-alpha.1-darwin-arm64.tar.gz",
-      "sha256": "96b9cde01a262701d84c22015947503d26047d6e2d64c75d1df623f432c76671",
-      "size": 613261620,
+      "name": "DeepSeek-Harness-0.1.6-alpha.2-darwin-arm64.tar.gz",
+      "url": "https://github.com/benson-album/dsh-desktop/releases/download/dsh-v0.1.6-alpha.2/DeepSeek-Harness-0.1.6-alpha.2-darwin-arm64.tar.gz",
+      "sha256": "d376cf1934c145b0a99bc655407872ee4258a29b006b6dc1ca3dbe50050c5335",
+      "size": 735096915,
       "os": "darwin",
       "arch": "arm64"
     },
     {
-      "name": "DeepSeek-Harness-0.1.6-alpha.1-linux-x64.tar.gz",
-      "url": "https://github.com/benson-album/dsh-desktop/releases/download/dsh-v0.1.6-alpha.1/DeepSeek-Harness-0.1.6-alpha.1-linux-x64.tar.gz",
-      "sha256": "e74b7967b49dbbe722e40fbc245af119e8a721ce81094d8734710b6bb79eed81",
-      "size": 640050968,
+      "name": "DeepSeek-Harness-0.1.6-alpha.2-linux-x64.tar.gz",
+      "url": "https://github.com/benson-album/dsh-desktop/releases/download/dsh-v0.1.6-alpha.2/DeepSeek-Harness-0.1.6-alpha.2-linux-x64.tar.gz",
+      "sha256": "ef5897aabe0c8550affab0c7ffef5c14d3b593d8126034256b57356abdce544f",
+      "size": 722854976,
       "os": "linux",
       "arch": "x64"
     }

@@ -1,22 +1,22 @@
 {
   "schemaVersion": 1,
-  "version": "0.1.7-rc.1",
-  "tag": "dsh-v0.1.7-rc.1",
-  "publishedAt": "2026-09-24T09:20:12Z",
+  "version": "0.1.7-rc.2",
+  "tag": "dsh-v0.1.7-rc.2",
+  "publishedAt": "2026-09-25T09:39:14Z",
   "assets": [
     {
-      "name": "DeepSeek-Harness-0.1.7-rc.1-darwin-arm64.tar.gz",
-      "url": "https://github.com/benson-album/dsh-desktop/releases/download/dsh-v0.1.7-rc.1/DeepSeek-Harness-0.1.7-rc.1-darwin-arm64.tar.gz",
-      "sha256": "911648b65422ffccf2ddd417a51cca03b6f2dca0be41a0e1e5f5506e160b94be",
-      "size": 753940701,
+      "name": "DeepSeek-Harness-0.1.7-rc.2-darwin-arm64.tar.gz",
+      "url": "https://github.com/benson-album/dsh-desktop/releases/download/dsh-v0.1.7-rc.2/DeepSeek-Harness-0.1.7-rc.2-darwin-arm64.tar.gz",
+      "sha256": "098ed64de797fd3937ad1b942994e655a83f38fc5db1bf6b04c44a19a4204da8",
+      "size": 759586103,
       "os": "darwin",
       "arch": "arm64"
     },
     {
-      "name": "DeepSeek-Harness-0.1.7-rc.1-linux-x64.tar.gz",
-      "url": "https://github.com/benson-album/dsh-desktop/releases/download/dsh-v0.1.7-rc.1/DeepSeek-Harness-0.1.7-rc.1-linux-x64.tar.gz",
-      "sha256": "a3ed0a3f1d68ea106e43b4cf5fbe97072c61c0f8ff41099d9cde1392bf96b7d8",
-      "size": 761356444,
+      "name": "DeepSeek-Harness-0.1.7-rc.2-linux-x64.tar.gz",
+      "url": "https://github.com/benson-album/dsh-desktop/releases/download/dsh-v0.1.7-rc.2/DeepSeek-Harness-0.1.7-rc.2-linux-x64.tar.gz",
+      "sha256": "40719d5070a0fec0c313ea941110580f0ed83550fb116df95c0fbc80ffc955f2",
+      "size": 771976792,
       "os": "linux",
       "arch": "x64"
     }

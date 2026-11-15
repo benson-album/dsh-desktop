@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "version": "0.2.2-rc.2",
-  "tag": "dsh-v0.2.2-rc.2",
-  "publishedAt": "2026-11-11T11:50:48Z",
+  "version": "0.2.2-rc.3",
+  "tag": "dsh-v0.2.2-rc.3",
+  "publishedAt": "2026-11-13T12:04:09Z",
   "assets": [
     {
-      "name": "DeepSeek-Harness-0.2.2-rc.2-linux-x64.tar.gz",
-      "url": "https://github.com/benson-album/dsh-desktop/releases/download/dsh-v0.2.2-rc.2/DeepSeek-Harness-0.2.2-rc.2-linux-x64.tar.gz",
-      "sha256": "4d30c49c61845281d791eec67aec27bbf3eab3d9c4542812b07355de36b88f2b",
-      "size": 861275610,
+      "name": "DeepSeek-Harness-0.2.2-rc.3-linux-x64.tar.gz",
+      "url": "https://github.com/benson-album/dsh-desktop/releases/download/dsh-v0.2.2-rc.3/DeepSeek-Harness-0.2.2-rc.3-linux-x64.tar.gz",
+      "sha256": "3d763058014c7275bd78cb5ccf0776410bae47b2bf6b43db4be3eb59d8dcf761",
+      "size": 861713002,
       "os": "linux",
       "arch": "x64"
     }
